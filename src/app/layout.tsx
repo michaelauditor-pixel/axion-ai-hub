@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+﻿import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "AXION AI HUB",
-  description: "Global AI Creation Platform — Internet Coverage Model (ICM)",
+  description: "Global AI Creation Platform â€” Internet Coverage Model (ICM)",
   verification: {
     google: "4pkDNjfeUFPaN4UrQOipnvXE4kn3Aeo_I2wxsbUyoY0",
   },
@@ -29,6 +29,7 @@ export default function RootLayout({
   return (
     <html lang="en">
     <head>
+        <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3426854646828904" crossorigin="anonymous"></script>
     </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
@@ -52,3 +53,4 @@ export default function RootLayout({
     </html>
   );
 }
+
