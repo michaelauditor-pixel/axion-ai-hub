@@ -1,56 +1,24 @@
-﻿import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
-import Script from "next/script";
-import "./globals.css";
+﻿import Script from 'next/script';
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
-export const metadata: Metadata = {
-  title: "AXION AI HUB",
-  description: "Global AI Creation Platform â€” Internet Coverage Model (ICM)",
-  verification: {
-    google: "4pkDNjfeUFPaN4UrQOipnvXE4kn3Aeo_I2wxsbUyoY0",
-  },
+export const metadata = {
+  title: 'AXION AI HUB',
+  description: 'Global AI tools platform'
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export default function RootLayout({ children }) {
   return (
     <html lang="en">
-    <head>
-        <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3426854646828904" crossorigin="anonymous"></script>
-    </head>
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
-        {children}
-
+      <head>
         <Script
-          src="https://www.googletagmanager.com/gtag/js?id=G-YT7WZM6DPX"
+          async
+          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3426854646828904"
+          crossOrigin="anonymous"
           strategy="afterInteractive"
         />
-
-        <Script id="google-analytics" strategy="afterInteractive">
-          {`
-            window.dataLayer = window.dataLayer || [];
-            function gtag(){dataLayer.push(arguments);}
-            gtag('js', new Date());
-            gtag('config', 'G-YT7WZM6DPX');
-          `}
-        </Script>
+      </head>
+      <body style={{fontFamily:"Arial",padding:"20px"}}>
+        {children}
       </body>
     </html>
   );
 }
-
