@@ -25,10 +25,22 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
-        {children}
-      </body>
+  className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+>
+  {children}
+
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-YT7WZM6DPX"></script>
+
+  <script>
+    {`
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-YT7WZM6DPX');
+    `}
+  </script>
+
+</body>
     </html>
   );
 }
