@@ -16,6 +16,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "AXION AI HUB",
   description: "Global AI Creation Platform — Internet Coverage Model (ICM)",
+  verification: {
+    google: "4pkDNjfeUFPaN4UrQOipnvXE4kn3Aeo_I2wxsbUyoY0",
+  },
 };
 
 export default function RootLayout({
