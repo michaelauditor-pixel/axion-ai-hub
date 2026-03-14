@@ -1,4 +1,5 @@
 ﻿import "./globals.css";
+import Script from "next/script"
 
 export const metadata = {
   title: "AXION AI HUB",
@@ -9,11 +10,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <head>
-        <script
+        <Script
+          id="adsense-script"
+          strategy="beforeInteractive"
           async
           src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3426854646828904"
           crossOrigin="anonymous"
-        ></script>
+        />
+        
       </head>
       <body style={{ fontFamily: "Arial, sans-serif", padding: "20px" }}>
         {children}
@@ -21,3 +25,4 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     </html>
   );
 }
+
