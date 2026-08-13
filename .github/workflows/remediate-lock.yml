@@ -1,0 +1,47 @@
+name: Temporary lockfile remediation
+
+on:
+  push:
+    branches: [agent/add-ci]
+
+permissions:
+  contents: write
+
+jobs:
+  regenerate-lockfile:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v7
+        with:
+          ref: agent/add-ci
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Generate compatible lockfile
+        run: npm install --package-lock-only --ignore-scripts
+
+      - name: Apply compatible security fixes
+        run: npm audit fix --package-lock-only --ignore-scripts
+
+      - name: Verify zero known vulnerabilities
+        run: npm audit --audit-level=low
+
+      - name: Commit secure lockfile
+        run: |
+          if git diff --quiet -- package-lock.json; then
+            echo "Lockfile already current"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package-lock.json
+          git commit -m "refresh secure dependency lockfile"
+          git push origin HEAD:agent/add-ci
