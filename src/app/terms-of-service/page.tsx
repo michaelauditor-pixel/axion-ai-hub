@@ -8,7 +8,7 @@
       <h2>AI Generated Content</h2>
       <p>AI outputs are provided for assistance and must be reviewed by users.</p>
       <h2>Liability</h2>
-      <p>The platform is provided "as is" without warranties.</p>
+      <p>The platform is provided &quot;as is&quot; without warranties.</p>
     </main>
   );
 }
