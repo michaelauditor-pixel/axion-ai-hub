@@ -1,0 +1,3 @@
+Contact: mailto:contact@axionaihub.com
+Preferred-Languages: en, pt-BR
+Canonical: https://axionaihub.com/.well-known/security.txt
