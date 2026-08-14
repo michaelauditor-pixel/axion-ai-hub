@@ -1,0 +1,33 @@
+name: SEO Discovery
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 5 * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  submit-indexnow:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Collect canonical sitemap URLs and submit to IndexNow
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, urllib.request, xml.etree.ElementTree as ET
+          sitemap='https://axionaihub.com/sitemap.xml'
+          with urllib.request.urlopen(sitemap, timeout=20) as r:
+              root=ET.fromstring(r.read())
+          ns={'s':'http://www.sitemaps.org/schemas/sitemap/0.9'}
+          urls=[n.text for n in root.findall('.//s:loc',ns) if n.text and n.text.startswith('https://axionaihub.com')]
+          payload=json.dumps({'urls':urls[:10000]}).encode()
+          req=urllib.request.Request('https://axionaihub.com/api/indexnow',data=payload,headers={'Content-Type':'application/json'},method='POST')
+          with urllib.request.urlopen(req, timeout=30) as r:
+              body=r.read().decode()
+              print('submitted',len(urls),'status',r.status)
+              print(body[:1000])
+          PY
