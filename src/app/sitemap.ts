@@ -1,9 +1,24 @@
-﻿export default function sitemap() {
-  return [
-    { url: "https://axion-ai-hub.vercel.app", lastModified: new Date() },
-    { url: "https://axion-ai-hub.vercel.app/about", lastModified: new Date() },
-    { url: "https://axion-ai-hub.vercel.app/contact", lastModified: new Date() },
-    { url: "https://axion-ai-hub.vercel.app/privacy-policy", lastModified: new Date() },
-    { url: "https://axion-ai-hub.vercel.app/terms-of-service", lastModified: new Date() }
+import type { MetadataRoute } from "next";
+
+const SITE_URL = "https://axionaihub.com";
+
+export default function sitemap(): MetadataRoute.Sitemap {
+  const now = new Date();
+  const routes = [
+    "",
+    "/about",
+    "/contact",
+    "/privacy-policy",
+    "/terms-of-service",
+    "/tools",
+    "/templates",
+    "/prompts",
   ];
+
+  return routes.map((route) => ({
+    url: `${SITE_URL}${route}`,
+    lastModified: now,
+    changeFrequency: route === "" ? "daily" : "weekly",
+    priority: route === "" ? 1 : route === "/tools" ? 0.9 : 0.7,
+  }));
 }
