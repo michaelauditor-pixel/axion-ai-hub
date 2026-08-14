@@ -1,24 +1,3 @@
 import type { MetadataRoute } from "next";
-
-const SITE_URL = "https://axionaihub.com";
-
-export default function sitemap(): MetadataRoute.Sitemap {
-  const now = new Date();
-  const routes = [
-    "",
-    "/about",
-    "/contact",
-    "/privacy-policy",
-    "/terms-of-service",
-    "/tools",
-    "/templates",
-    "/prompts",
-  ];
-
-  return routes.map((route) => ({
-    url: `${SITE_URL}${route}`,
-    lastModified: now,
-    changeFrequency: route === "" ? "daily" : "weekly",
-    priority: route === "" ? 1 : route === "/tools" ? 0.9 : 0.7,
-  }));
-}
+const SITE_URL="https://axionaihub.com";
+export default function sitemap():MetadataRoute.Sitemap{const now=new Date();const routes=[{path:"",p:1,c:"daily"},{path:"/tools",p:.95,c:"daily"},{path:"/pricing",p:.9,c:"weekly"},{path:"/templates",p:.85,c:"weekly"},{path:"/prompts",p:.85,c:"weekly"},{path:"/about",p:.7,c:"monthly"},{path:"/contact",p:.7,c:"monthly"},{path:"/privacy-policy",p:.3,c:"yearly"},{path:"/terms-of-service",p:.3,c:"yearly"}] as const;return routes.map(r=>({url:`${SITE_URL}${r.path}`,lastModified:now,changeFrequency:r.c,priority:r.p}))}
