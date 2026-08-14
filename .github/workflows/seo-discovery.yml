@@ -2,31 +2,55 @@ name: SEO Discovery
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src/app/**'
+      - 'public/**'
+      - '.github/workflows/seo-discovery.yml'
   schedule:
     - cron: "17 5 * * *"
 
 permissions:
   contents: read
 
+concurrency:
+  group: seo-discovery-production
+  cancel-in-progress: true
+
 jobs:
   submit-indexnow:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 8
     steps:
-      - name: Collect canonical sitemap URLs and submit to IndexNow
+      - name: Wait for production deployment and submit canonical URLs
         shell: bash
         run: |
           set -euo pipefail
           python - <<'PY'
-          import json, urllib.request, xml.etree.ElementTree as ET
+          import json, time, urllib.request, xml.etree.ElementTree as ET
           sitemap='https://axionaihub.com/sitemap.xml'
-          with urllib.request.urlopen(sitemap, timeout=20) as r:
-              root=ET.fromstring(r.read())
-          ns={'s':'http://www.sitemaps.org/schemas/sitemap/0.9'}
-          urls=[n.text for n in root.findall('.//s:loc',ns) if n.text and n.text.startswith('https://axionaihub.com')]
-          payload=json.dumps({'urls':urls[:10000]}).encode()
-          req=urllib.request.Request('https://axionaihub.com/api/indexnow',data=payload,headers={'Content-Type':'application/json'},method='POST')
-          with urllib.request.urlopen(req, timeout=30) as r:
+          data=None
+          for attempt in range(1,9):
+              try:
+                  req=urllib.request.Request(sitemap,headers={'User-Agent':'AXION-SEO-Discovery/1.0'})
+                  with urllib.request.urlopen(req,timeout=20) as r:
+                      if r.status==200:
+                          data=r.read()
+                          root=ET.fromstring(data)
+                          ns={'s':'http://www.sitemaps.org/schemas/sitemap/0.9'}
+                          urls=[n.text for n in root.findall('.//s:loc',ns) if n.text and n.text.startswith('https://axionaihub.com/')]
+                          if urls:
+                              break
+              except Exception as e:
+                  print('sitemap attempt',attempt,'failed:',e)
+              time.sleep(20)
+          else:
+              raise SystemExit('production sitemap unavailable after retries')
+          urls=list(dict.fromkeys(urls))[:10000]
+          payload=json.dumps({'urls':urls}).encode()
+          req=urllib.request.Request('https://axionaihub.com/api/indexnow',data=payload,headers={'Content-Type':'application/json','User-Agent':'AXION-SEO-Discovery/1.0'},method='POST')
+          with urllib.request.urlopen(req,timeout=30) as r:
               body=r.read().decode()
               print('submitted',len(urls),'status',r.status)
               print(body[:1000])

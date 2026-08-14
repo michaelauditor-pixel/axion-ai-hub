@@ -15,7 +15,11 @@ export async function generateMetadata({params}:{params:Promise<{slug:string}>})
 
 export default async function ToolPage({params}:{params:Promise<{slug:string}>}){
   const {slug}=await params;const tool=getTool(slug);if(!tool)notFound();
-  const schema={"@context":"https://schema.org","@graph":[{"@type":"SoftwareApplication",name:tool.name,description:tool.description,applicationCategory:"BusinessApplication",operatingSystem:"Web",url:`${SITE_URL}/tools/${tool.slug}`,offers:{"@type":"Offer",price:"0",priceCurrency:"USD"}},{"@type":"BreadcrumbList",itemListElement:[{"@type":"ListItem",position:1,name:"Home",item:SITE_URL},{"@type":"ListItem",position:2,name:"AI Tools",item:`${SITE_URL}/tools`},{"@type":"ListItem",position:3,name:tool.name,item:`${SITE_URL}/tools/${tool.slug}`}]}]};
+  const url=`${SITE_URL}/tools/${tool.slug}`;
+  const schema={"@context":"https://schema.org","@graph":[
+    {"@type":"WebPage","@id":`${url}#webpage`,name:tool.name,description:tool.description,url,inLanguage:"en",isPartOf:{"@id":`${SITE_URL}/#website`},about:tool.keywords},
+    {"@type":"BreadcrumbList",itemListElement:[{"@type":"ListItem",position:1,name:"Home",item:SITE_URL},{"@type":"ListItem",position:2,name:"AI Tools",item:`${SITE_URL}/tools`},{"@type":"ListItem",position:3,name:tool.name,item:url}]}
+  ]};
   const related=toolDefinitions.filter(t=>t.slug!==tool.slug).slice(0,3);
   return <main className="page-shell">
     <script type="application/ld+json" dangerouslySetInnerHTML={{__html:JSON.stringify(schema)}}/>
