@@ -1,34 +1,10 @@
-﻿export default function Home() {
-  return (
-    <main style={{ padding: "60px", maxWidth: "1000px", margin: "0 auto" }}>
-      <h1 style={{ fontSize: "48px", marginBottom: "16px" }}>AXION AI HUB</h1>
-      <p style={{ fontSize: "20px", color: "#444", marginBottom: "24px" }}>
-        Global AI tools platform for creators, marketers, founders and teams.
-      </p>
+import type { Metadata } from "next";
 
-      <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", marginBottom: "28px" }}>
-        <a href="/about">About</a>
-        <a href="/contact">Contact</a>
-        <a href="/privacy-policy">Privacy Policy</a>
-        <a href="/terms-of-service">Terms of Service</a>
-      </div>
+export const metadata: Metadata = { title: "AI Tools for Marketing, SEO, Content and Business", description: "Use AXION AI HUB to generate, optimize and scale marketing, SEO, content and business workflows with practical AI tools.", alternates: { canonical: "/" } };
 
-      <section style={{ display: "grid", gap: "16px" }}>
-        <div style={{ border: "1px solid #ddd", borderRadius: "12px", padding: "20px" }}>
-          <h2>AI Tools</h2>
-          <p>Practical tools, prompts and templates for real-world workflows.</p>
-        </div>
+const categories = [
+  ["AI Marketing", "Campaign ideas, copy, positioning and conversion workflows.", "/tools"], ["SEO & Growth", "Keyword, content and organic-growth workflows built for discoverability.", "/tools"], ["Content Creation", "Faster ideation and production for web, social and video content.", "/tools"], ["Business", "Practical strategy, offers, research and operational output for teams.", "/tools"], ["Prompts", "Reusable prompt frameworks for consistent AI-assisted execution.", "/prompts"], ["Templates", "Ready-to-use structures that reduce repetitive work.", "/templates"],
+];
+const outcomes = ["Create useful output in seconds", "Reduce repetitive knowledge work", "Build repeatable AI workflows", "Scale content and growth operations"];
 
-        <div style={{ border: "1px solid #ddd", borderRadius: "12px", padding: "20px" }}>
-          <h2>SEO-Ready Platform</h2>
-          <p>Built for scalable growth, organic traffic and global AI distribution.</p>
-        </div>
-
-        <div style={{ border: "1px solid #ddd", borderRadius: "12px", padding: "20px" }}>
-          <h2>Next Step</h2>
-          <p>The platform is being expanded into a complete AI tools ecosystem.</p>
-        </div>
-      </section>
-    </main>
-  );
-}
+export default function Home() { return <main className="page-shell home-page"><section className="hero"><div className="hero-copy"><span className="eyebrow">Global AI Creation Platform</span><h1>One AI workspace for growth, content and execution.</h1><p className="hero-lead">AXION AI HUB brings practical AI tools, prompts and templates into one focused platform for creators, marketers, founders and modern teams.</p><div className="hero-actions"><a className="button primary" href="/tools">Explore AI tools</a><a className="button secondary" href="/pricing">View pricing</a></div><div className="hero-proof"><span>Fast workflows</span><span>Global use cases</span><span>Free tools available</span><span>Built for scale</span></div></div><div className="hero-panel"><div className="panel-top"><span className="status-dot" /> Live AI workspace</div><div className="metric-grid"><div><strong>AI</strong><small>Generation</small></div><div><strong>SEO</strong><small>Discovery</small></div><div><strong>Ops</strong><small>Automation</small></div><div><strong>Pro</strong><small>Scale</small></div></div>{[["1","Choose a tool","Start from the workflow you need."],["2","Add context","Describe the product, audience or task."],["3","Generate & refine","Turn intent into usable output."]].map(([n,t,p])=><div className="workflow-card" key={n}><span>{n}</span><div><strong>{t}</strong><p>{p}</p></div></div>)}</div></section><section className="trust-strip">{outcomes.map(i=><span key={i}>{i}</span>)}</section><section className="section-block"><div className="section-heading"><span className="eyebrow">Explore the platform</span><h2>AI tools organized around work, not hype.</h2><p>Move from idea to output with focused workflows designed around practical business outcomes.</p></div><div className="card-grid">{categories.map(([title,text,href])=><a className="feature-card" href={href} key={title}><span className="icon-box">✦</span><h3>{title}</h3><p>{text}</p><strong>Explore →</strong></a>)}</div></section><section className="split-section"><div><span className="eyebrow">Built for repeatability</span><h2>Turn isolated prompts into reliable workflows.</h2><p>AXION combines generators, reusable prompts and structured templates so teams can reduce blank-page work and standardize high-value tasks.</p><a className="text-link" href="/templates">Browse templates →</a></div><div className="stack-card">{[["01","Discover","Find the right workflow for the job."],["02","Generate","Produce a useful first result quickly."],["03","Refine","Improve tone, structure and context."],["04","Scale","Repeat what works across channels."]].map(([n,t,p])=><div key={n}><b>{n}</b><span><strong>{t}</strong><small>{p}</small></span></div>)}</div></section><section className="cta-band"><div><span className="eyebrow">Start building</span><h2>Put AI to work on a real task.</h2><p>Explore the tool directory and turn a business objective into usable output.</p></div><a className="button light" href="/tools">Open AI Tools</a></section></main>; }
