@@ -165,12 +165,39 @@ jobs:
         working-directory: neurocore/ci/app
         run: flutter pub get
 
-      - name: Apply safe Dart fixes and format
+      - name: Apply safe Dart fixes, compatibility corrections and format
         working-directory: neurocore/ci/app
         shell: bash
         run: |
           set -euo pipefail
           dart fix --apply
+          python3 - <<'PY'
+          from pathlib import Path
+
+          crypto = Path('lib/core/security/crypto_box.dart')
+          s = crypto.read_text()
+          s = s.replace(
+              'const FlutterSecureStorage _secureStorage = FlutterSecureStorage();',
+              'final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();',
+          )
+          s = s.replace(
+              'const FlutterSecureStorage _secureStorage = const FlutterSecureStorage();',
+              'final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();',
+          )
+          crypto.write_text(s)
+
+          main = Path('lib/main.dart')
+          s = main.read_text()
+          s = s.replace("import 'package:cryptography_flutter/cryptography_flutter.dart';\n", '')
+          s = s.replace('  FlutterCryptography.enable();\n', '')
+          s = s.replace('FlutterCryptography.enable();\n', '')
+          main.write_text(s)
+
+          if 'const FlutterSecureStorage _secureStorage' in crypto.read_text():
+              raise SystemExit('invalid const instance field remains')
+          if 'FlutterCryptography.enable()' in main.read_text():
+              raise SystemExit('deprecated FlutterCryptography.enable remains')
+          PY
           dart format lib test
 
       - name: Flutter analyze strict
@@ -209,6 +236,7 @@ jobs:
             "local_structural_audit": "271/271 pass (V1.7 pre-compatibility baseline)",
             "ci_source_contract": "pass",
             "dart_fix": "applied",
+            "manual_compatibility_corrections": "pass",
             "dart_format": "pass",
             "flutter_analyze_strict": "pass",
             "flutter_test": "pass",
