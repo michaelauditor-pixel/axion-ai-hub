@@ -1,0 +1,185 @@
++      await widget.services.feedback.correct();
+       _feedback = 'Boa observação!';
+     }
+ 
+@@ -298,6 +320,7 @@
+     );
+ 
+     _completed = true;
++    await widget.services.feedback.complete();
+     if (mounted) {
+       setState(() {});
+     }
+diff -ruN source_before/lib/features/g01_focus/stimulus.dart source_after/lib/features/g01_focus/stimulus.dart
+--- source_before/lib/features/g01_focus/stimulus.dart	2026-08-21 13:15:46.000000000 +0000
++++ source_after/lib/features/g01_focus/stimulus.dart	2026-08-21 14:47:59.418625355 +0000
+@@ -41,8 +41,12 @@
+ 
+   final Random _random;
+ 
+-  FocusTrial generate(DifficultyConfig config) {
+-    final targetPresent = _random.nextDouble() < config.targetProbability;
++  FocusTrial generate(
++    DifficultyConfig config, {
++    bool? targetPresentOverride,
++  }) {
++    final targetPresent =
++        targetPresentOverride ?? _random.nextDouble() < config.targetProbability;
+     final items = <StimulusItem>[];
+ 
+     for (var i = 0; i < config.itemCount; i += 1) {
+@@ -61,6 +65,59 @@
+     return FocusTrial(items: items, targetPresent: targetPresent);
+   }
+ 
++  List<bool> generatePresenceSchedule(
++    DifficultyConfig config,
++    int trialCount, {
++    int maxConsecutiveSame = 4,
++  }) {
++    if (trialCount < 4) {
++      throw ArgumentError.value(trialCount, 'trialCount', 'must be >= 4');
++    }
++    final desiredTargets = (config.targetProbability * trialCount).round();
++    final targetCount = desiredTargets.clamp(2, trialCount - 2).toInt();
++    final schedule = <bool>[
++      ...List<bool>.filled(targetCount, true),
++      ...List<bool>.filled(trialCount - targetCount, false),
++    ];
++
++    bool valid(List<bool> values) {
++      var run = 0;
++      bool? previous;
++      for (final value in values) {
++        if (previous == value) {
++          run += 1;
++        } else {
++          previous = value;
++          run = 1;
++        }
++        if (run > maxConsecutiveSame) return false;
++      }
++      return true;
++    }
++
++    for (var attempt = 0; attempt < 250; attempt += 1) {
++      schedule.shuffle(_random);
++      if (valid(schedule)) return List<bool>.of(schedule);
++    }
++
++    // Fallback alternado preservando a contagem planejada.
++    final result = <bool>[];
++    var remainingTargets = targetCount;
++    var remainingAbsent = trialCount - targetCount;
++    var preferTarget = true;
++    while (remainingTargets + remainingAbsent > 0) {
++      if ((preferTarget && remainingTargets > 0) || remainingAbsent == 0) {
++        result.add(true);
++        remainingTargets -= 1;
++      } else {
++        result.add(false);
++        remainingAbsent -= 1;
++      }
++      preferTarget = !preferTarget;
++    }
++    return result;
++  }
++
+   StimulusItem _distractor(DifficultyConfig config) {
+     if (config.conjunctionDistractors) {
+       final tricky = _random.nextDouble();
+diff -ruN source_before/lib/features/g02_inhibition/g02_screen.dart source_after/lib/features/g02_inhibition/g02_screen.dart
+--- source_before/lib/features/g02_inhibition/g02_screen.dart	2026-08-21 13:15:46.000000000 +0000
++++ source_after/lib/features/g02_inhibition/g02_screen.dart	2026-08-21 14:46:02.679050400 +0000
+@@ -2,6 +2,8 @@
+ 
+ import 'package:flutter/material.dart';
+ 
++import '../../widgets/game_visual_strip.dart';
++
+ import '../../core/adaptive/adaptive_engine.dart';
+ import '../../core/adaptive/inhibition_adaptive_engine.dart';
+ import '../../core/adaptive/inhibition_performance_snapshot.dart';
+@@ -39,6 +41,9 @@
+   final List<InhibitionPerformanceSnapshot> _completedBlocks = [];
+ 
+   InhibitionTrial? _trial;
++  List<InhibitionTrial> _blockTrials = const [];
++  int _blockTrialCursor = 0;
++  int _trailingGoRun = 0;
+   Timer? _trialTimer;
+   DateTime? _trialStartedAt;
+ 
+@@ -82,6 +87,7 @@
+       },
+     );
+ 
++    await widget.services.feedback.start();
+     if (!mounted) return;
+     setState(() {
+       _instruction = false;
+@@ -93,12 +99,21 @@
+   Future<void> _startBlock() async {
+     _blockPerformance = InhibitionPerformanceAccumulator();
+     _trialIndex = 0;
++    _blockTrialCursor = 0;
+     _blockIndex += 1;
+ 
+     final config = InhibitionDifficultyConfig.forLevel(_adaptiveState.level);
++    _blockTrials = _generator.generateBlock(
++      config,
++      _trialsPerBlock,
++      initialGoRun: _trailingGoRun,
++    );
+     await _record('block_started', {
+       'block': _blockIndex,
+       'difficulty': config.toJson(),
++      'go_trials_planned': _blockTrials.where((t) => t.isGo).length,
++      'no_go_trials_planned': _blockTrials.where((t) => !t.isGo).length,
++      'max_consecutive_go': 3,
+     });
+     await _startTrial();
+   }
+@@ -106,7 +121,9 @@
+   Future<void> _startTrial() async {
+     _trialTimer?.cancel();
+     final config = InhibitionDifficultyConfig.forLevel(_adaptiveState.level);
+-    final trial = _generator.generate(config);
++    if (_blockTrialCursor >= _blockTrials.length) return;
++    final trial = _blockTrials[_blockTrialCursor];
++    _blockTrialCursor += 1;
+     _trial = trial;
+     _trialIndex += 1;
+     _resolved = false;
+@@ -148,10 +165,12 @@
+     final outcome = trial.isGo ? 'go_hit' : 'no_go_commission';
+     if (trial.isGo) {
+       _blockPerformance.goHits += 1;
++      await widget.services.feedback.correct();
+       _blockPerformance.reactionTimesMs.add(reactionTime);
+       _feedback = 'Muito bem!';
+     } else {
+       _blockPerformance.commissions += 1;
++      await widget.services.feedback.gentleMiss();
+       _feedback = 'Quando aparecer PARE, espere.';
+     }
+ 
+@@ -176,9 +195,11 @@
+     final outcome = trial.isGo ? 'go_omission' : 'no_go_correct_inhibition';
+     if (trial.isGo) {
+       _blockPerformance.omissions += 1;
++      await widget.services.feedback.gentleMiss();
+       _feedback = 'Tudo bem. A próxima vem logo.';
+     } else {
+       _blockPerformance.correctInhibitions += 1;
++      await widget.services.feedback.correct();
+       _feedback = 'Ótimo controle!';
+     }
+ 
+@@ -209,6 +230,7 @@
+   }
+ 
+   Future<void> _finishBlock() async {
++    _trailingGoRun = InhibitionTrialGenerator.trailingGoRun(_blockTrials);
+     final snapshot = _blockPerformance.snapshot();
+     _completedBlocks.add(snapshot);
