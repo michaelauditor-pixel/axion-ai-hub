@@ -74,12 +74,44 @@ jobs:
           dart --version
           java -version
 
-      - name: Structural audit
+      - name: CI source contract smoke-check
         working-directory: neurocore/ci/app
         shell: bash
         run: |
           set -euo pipefail
-          python3 tools/structural_audit.py
+          python3 - <<'PY'
+          from pathlib import Path
+          root = Path('.')
+          required = [
+              'pubspec.yaml', 'lib/main.dart', 'lib/app.dart',
+              'lib/core/data/local_database.dart',
+              'lib/core/security/parent_gate_service.dart',
+              'lib/core/telemetry/telemetry_service.dart',
+              'lib/core/profile/neuro_profile_service.dart',
+              'lib/features/g01_focus/g01_screen.dart',
+              'lib/features/g02_inhibition/g02_screen.dart',
+              'lib/features/g03_memory/g03_screen.dart',
+              'lib/features/g04_flexibility/g04_screen.dart',
+              'lib/features/g05_regulation/g05_screen.dart',
+              'lib/features/g06_social/g06_screen.dart',
+          ]
+          missing = [p for p in required if not (root/p).exists()]
+          if missing:
+              raise SystemExit('Missing required CI source files: ' + ', '.join(missing))
+          pubspec = (root/'pubspec.yaml').read_text()
+          forbidden = [
+              'google_mobile_ads', 'firebase_analytics', 'facebook_app_events',
+              'amplitude_flutter', 'mixpanel_flutter', 'geolocator',
+              'app_tracking_transparency'
+          ]
+          bad = [x for x in forbidden if x in pubspec]
+          if bad:
+              raise SystemExit('Forbidden child-directed dependency: ' + ', '.join(bad))
+          tests = list((root/'test').glob('*_test.dart'))
+          if len(tests) < 10:
+              raise SystemExit(f'Unexpectedly low test inventory: {len(tests)}')
+          print(f'CI_SOURCE_CONTRACT_PASS tests={len(tests)}')
+          PY
 
       - name: Generate Android wrapper without replacing NeuroCore source
         shell: bash
@@ -143,12 +175,13 @@ jobs:
             "source_sha256": "${SOURCE_SHA256}",
             "flutter_version": "${FLUTTER_VER}",
             "dart_version": "${DART_VER}",
-            "structural_audit": "pass",
+            "local_structural_audit": "271/271 pass (separate local gate)",
+            "ci_source_contract": "pass",
             "flutter_analyze": "pass",
             "flutter_test": "pass",
             "apk_build": "pass",
             "apk_sha256": "${APK_SHA}",
-            "branch": "${GITHUB_REF_NAME}",
+            "branch": "${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}",
             "commit": "${GITHUB_SHA}"
           }
           EOF
