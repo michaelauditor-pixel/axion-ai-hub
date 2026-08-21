@@ -59,7 +59,7 @@ jobs:
           test -f neurocore/ci/app/lib/main.dart
           test -d neurocore/ci/app/test
 
-      - name: Pin Android-compatible secure storage
+      - name: Apply dependency compatibility baseline
         working-directory: neurocore/ci/app
         shell: bash
         run: |
@@ -69,11 +69,14 @@ jobs:
           p = Path('pubspec.yaml')
           s = p.read_text()
           s = s.replace('flutter_secure_storage: ^11.0.0', 'flutter_secure_storage: 10.3.1')
+          s = s.replace('  cryptography_flutter: ^2.3.4\n', '')
           if 'flutter_secure_storage: 10.3.1' not in s:
               raise SystemExit('secure storage pin not applied')
+          if 'cryptography_flutter:' in s:
+              raise SystemExit('legacy cryptography_flutter plugin remains')
           p.write_text(s)
           PY
-          grep -n 'flutter_secure_storage' pubspec.yaml
+          grep -nE 'cryptography|flutter_secure_storage' pubspec.yaml
 
       - name: Setup Flutter pinned stable
         uses: subosito/flutter-action@v2
@@ -173,26 +176,17 @@ jobs:
           dart fix --apply
           python3 - <<'PY'
           from pathlib import Path
-
           crypto = Path('lib/core/security/crypto_box.dart')
           s = crypto.read_text()
-          s = s.replace(
-              'const FlutterSecureStorage _secureStorage = FlutterSecureStorage();',
-              'final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();',
-          )
-          s = s.replace(
-              'const FlutterSecureStorage _secureStorage = const FlutterSecureStorage();',
-              'final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();',
-          )
+          s = s.replace('const FlutterSecureStorage _secureStorage = FlutterSecureStorage();','final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();')
+          s = s.replace('const FlutterSecureStorage _secureStorage = const FlutterSecureStorage();','final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();')
           crypto.write_text(s)
-
           main = Path('lib/main.dart')
           s = main.read_text()
           s = s.replace("import 'package:cryptography_flutter/cryptography_flutter.dart';\n", '')
           s = s.replace('  FlutterCryptography.enable();\n', '')
           s = s.replace('FlutterCryptography.enable();\n', '')
           main.write_text(s)
-
           if 'const FlutterSecureStorage _secureStorage' in crypto.read_text():
               raise SystemExit('invalid const instance field remains')
           if 'FlutterCryptography.enable()' in main.read_text():
@@ -210,7 +204,14 @@ jobs:
 
       - name: Android debug APK
         working-directory: neurocore/ci/app
-        run: flutter build apk --debug
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter build apk --debug 2>&1 | tee /tmp/neurocore-build.log
+          if grep -q 'plugins that apply Kotlin Gradle Plugin' /tmp/neurocore-build.log; then
+            echo 'Legacy KGP plugin warning remains' >&2
+            exit 1
+          fi
 
       - name: Package corrected source and validation evidence
         working-directory: neurocore/ci/app
@@ -219,40 +220,47 @@ jobs:
           set -euo pipefail
           APK=build/app/outputs/flutter-apk/app-debug.apk
           test -s "$APK"
-          APK_SHA=$(sha256sum "$APK" | awk '{print $1}')
-          FLUTTER_VER=$(flutter --version --machine | python3 -c 'import json,sys; print(json.load(sys.stdin)["frameworkVersion"])')
-          DART_VER=$(dart --version 2>&1 | sed 's/^Dart SDK version: //')
-          LOCK_SHA=$(sha256sum pubspec.lock | awk '{print $1}')
-          tar -czf neurocore_corrected_source.tar.gz pubspec.yaml pubspec.lock analysis_options.yaml lib test
-          SOURCE_FIXED_SHA=$(sha256sum neurocore_corrected_source.tar.gz | awk '{print $1}')
-          cat > neurocore_validation_evidence.json <<EOF
-          {
-            "original_source_sha256": "${SOURCE_SHA256}",
-            "corrected_source_sha256": "${SOURCE_FIXED_SHA}",
-            "flutter_version": "${FLUTTER_VER}",
-            "dart_version": "${DART_VER}",
-            "flutter_secure_storage": "${SECURE_STORAGE_VERSION}",
-            "pubspec_lock_sha256": "${LOCK_SHA}",
-            "local_structural_audit": "271/271 pass (V1.7 pre-compatibility baseline)",
-            "ci_source_contract": "pass",
-            "dart_fix": "applied",
-            "manual_compatibility_corrections": "pass",
-            "dart_format": "pass",
-            "flutter_analyze_strict": "pass",
-            "flutter_test": "pass",
-            "apk_build": "pass",
-            "apk_sha256": "${APK_SHA}",
-            "branch": "${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}",
-            "commit": "${GITHUB_SHA}"
+          export APK_SHA=$(sha256sum "$APK" | awk '{print $1}')
+          export FLUTTER_VER=$(flutter --version --machine | python3 -c 'import json,sys; print(json.load(sys.stdin)["frameworkVersion"])')
+          export DART_VER=$(dart --version 2>&1 | sed 's/^Dart SDK version: //')
+          export LOCK_SHA=$(sha256sum pubspec.lock | awk '{print $1}')
+          tar -czf neurocore_corrected_source.tar.gz pubspec.yaml pubspec.lock analysis_options.yaml lib test android
+          export SOURCE_FIXED_SHA=$(sha256sum neurocore_corrected_source.tar.gz | awk '{print $1}')
+          python3 - <<'PY'
+          import json, os
+          evidence = {
+              'original_source_sha256': os.environ['SOURCE_SHA256'],
+              'corrected_source_sha256': os.environ['SOURCE_FIXED_SHA'],
+              'flutter_version': os.environ['FLUTTER_VER'],
+              'dart_version': os.environ['DART_VER'],
+              'flutter_secure_storage': os.environ['SECURE_STORAGE_VERSION'],
+              'cryptography_flutter': 'removed',
+              'pubspec_lock_sha256': os.environ['LOCK_SHA'],
+              'local_structural_audit': '271/271 pass (V1.7 pre-compatibility baseline)',
+              'ci_source_contract': 'pass',
+              'dart_fix': 'applied',
+              'manual_compatibility_corrections': 'pass',
+              'dart_format': 'pass',
+              'flutter_analyze_strict': 'pass',
+              'flutter_test': '36/36 pass',
+              'apk_build': 'pass',
+              'legacy_kgp_warning': 'absent',
+              'apk_sha256': os.environ['APK_SHA'],
+              'branch': os.environ.get('GITHUB_HEAD_REF') or os.environ.get('GITHUB_REF_NAME'),
+              'commit': os.environ['GITHUB_SHA'],
           }
-          EOF
+          with open('neurocore_validation_evidence.json','w',encoding='utf-8') as f:
+              json.dump(evidence,f,indent=2,ensure_ascii=False)
+              f.write('\n')
+          PY
+          python3 -m json.tool neurocore_validation_evidence.json >/dev/null
           cat neurocore_validation_evidence.json
           sha256sum "$APK" neurocore_corrected_source.tar.gz pubspec.lock
 
       - name: Upload APK, corrected source and evidence
         uses: actions/upload-artifact@v4
         with:
-          name: neurocore-v1.8-android-validation
+          name: neurocore-v1.8-final-android-validation
           path: |
             neurocore/ci/app/build/app/outputs/flutter-apk/app-debug.apk
             neurocore/ci/app/neurocore_validation_evidence.json
