@@ -7,6 +7,12 @@ on:
     paths:
       - 'neurocore/**'
       - '.github/workflows/neurocore-android-validation.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'neurocore/**'
+      - '.github/workflows/neurocore-android-validation.yml'
   workflow_dispatch:
 
 permissions:
