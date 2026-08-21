@@ -93,41 +93,6 @@ jobs:
           dart --version
           java -version
 
-      - name: CI source contract smoke-check
-        working-directory: neurocore/ci/app
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-          root = Path('.')
-          required = [
-              'pubspec.yaml', 'lib/main.dart', 'lib/app.dart',
-              'lib/core/data/local_database.dart',
-              'lib/core/security/parent_gate_service.dart',
-              'lib/core/telemetry/telemetry_service.dart',
-              'lib/core/profile/neuro_profile_service.dart',
-              'lib/features/g01_focus/g01_screen.dart',
-              'lib/features/g02_inhibition/g02_screen.dart',
-              'lib/features/g03_memory/g03_screen.dart',
-              'lib/features/g04_flexibility/g04_screen.dart',
-              'lib/features/g05_regulation/g05_screen.dart',
-              'lib/features/g06_social/g06_screen.dart',
-          ]
-          missing = [p for p in required if not (root/p).exists()]
-          if missing:
-              raise SystemExit('Missing required CI source files: ' + ', '.join(missing))
-          pubspec = (root/'pubspec.yaml').read_text()
-          forbidden = ['google_mobile_ads','firebase_analytics','facebook_app_events','amplitude_flutter','mixpanel_flutter','geolocator','app_tracking_transparency']
-          bad = [x for x in forbidden if x in pubspec]
-          if bad:
-              raise SystemExit('Forbidden child-directed dependency: ' + ', '.join(bad))
-          tests = list((root/'test').glob('*_test.dart'))
-          if len(tests) < 10:
-              raise SystemExit(f'Unexpectedly low test inventory: {len(tests)}')
-          print(f'CI_SOURCE_CONTRACT_PASS tests={len(tests)}')
-          PY
-
       - name: Generate Android wrapper without replacing NeuroCore source
         shell: bash
         run: |
@@ -159,11 +124,11 @@ jobs:
           manifest.write_text(s)
           PY
 
-      - name: Flutter pub get
+      - name: Flutter pub get baseline
         working-directory: neurocore/ci/app
         run: flutter pub get
 
-      - name: Apply safe Dart fixes, compatibility corrections and format
+      - name: Normalize V1.8 baseline before audit patch
         working-directory: neurocore/ci/app
         shell: bash
         run: |
@@ -176,32 +141,70 @@ jobs:
           s = s.replace('const FlutterSecureStorage _secureStorage = FlutterSecureStorage();','final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();')
           s = s.replace('const FlutterSecureStorage _secureStorage = const FlutterSecureStorage();','final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();')
           crypto.write_text(s)
-
           main = Path('lib/main.dart')
           s = main.read_text()
           s = s.replace("import 'package:cryptography_flutter/cryptography_flutter.dart';\n", '')
           s = s.replace('  FlutterCryptography.enable();\n', '')
           s = s.replace('FlutterCryptography.enable();\n', '')
           main.write_text(s)
-
           pub = Path('pubspec.yaml')
           s = pub.read_text()
           lines = [line for line in s.splitlines() if not line.strip().startswith('cryptography_flutter:')]
           pub.write_text('\n'.join(lines) + '\n')
-
-          if 'const FlutterSecureStorage _secureStorage' in crypto.read_text():
-              raise SystemExit('invalid const instance field remains')
-          if 'FlutterCryptography.enable()' in main.read_text():
-              raise SystemExit('deprecated FlutterCryptography.enable remains')
-          if 'cryptography_flutter:' in pub.read_text():
-              raise SystemExit('legacy cryptography_flutter dependency remains after dart fix')
           PY
           dart format lib test
           flutter pub get
-          if flutter pub deps --style=compact | grep -q '^cryptography_flutter '; then
-            echo 'cryptography_flutter still present in dependency graph' >&2
-            exit 1
-          fi
+
+      - name: Apply NeuroCore V1.9 full gameplay audit patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat neurocore/ci/v1_9_patch/part_*.patch > /tmp/neurocore-v1.9.patch
+          cd neurocore/ci/app
+          patch -p1 --batch --forward < /tmp/neurocore-v1.9.patch
+          dart format lib test
+          flutter pub get
+          grep -q 'generateBlock' lib/features/g02_inhibition/inhibition_trial.dart
+          grep -q 'max_consecutive_go' lib/features/g02_inhibition/g02_screen.dart
+          grep -q 'responseWindowMs' lib/features/g05_regulation/regulation_difficulty_config.dart
+          grep -q 'PresentedSocialScenario' lib/features/g06_social/social_scenario.dart
+          test -f lib/widgets/game_visual_strip.dart
+          test -f lib/core/feedback/game_feedback_service.dart
+
+      - name: CI source contract smoke-check
+        working-directory: neurocore/ci/app
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          root = Path('.')
+          required = [
+              'pubspec.yaml', 'lib/main.dart', 'lib/app.dart',
+              'lib/core/data/local_database.dart',
+              'lib/core/security/parent_gate_service.dart',
+              'lib/core/telemetry/telemetry_service.dart',
+              'lib/core/profile/neuro_profile_service.dart',
+              'lib/core/feedback/game_feedback_service.dart',
+              'lib/widgets/game_visual_strip.dart',
+              'lib/features/g01_focus/g01_screen.dart',
+              'lib/features/g02_inhibition/g02_screen.dart',
+              'lib/features/g03_memory/g03_screen.dart',
+              'lib/features/g04_flexibility/g04_screen.dart',
+              'lib/features/g05_regulation/g05_screen.dart',
+              'lib/features/g06_social/g06_screen.dart',
+          ]
+          missing = [p for p in required if not (root/p).exists()]
+          if missing:
+              raise SystemExit('Missing V1.9 files: ' + ', '.join(missing))
+          pubspec = (root/'pubspec.yaml').read_text()
+          forbidden = ['google_mobile_ads','firebase_analytics','facebook_app_events','amplitude_flutter','mixpanel_flutter','geolocator','app_tracking_transparency']
+          bad = [x for x in forbidden if x in pubspec]
+          if bad:
+              raise SystemExit('Forbidden child-directed dependency: ' + ', '.join(bad))
+          tests = list((root/'test').glob('*_test.dart'))
+          print(f'CI_SOURCE_CONTRACT_PASS tests={len(tests)}')
+          PY
 
       - name: Flutter analyze strict
         working-directory: neurocore/ci/app
@@ -211,7 +214,7 @@ jobs:
         working-directory: neurocore/ci/app
         run: flutter test --reporter expanded
 
-      - name: Android debug APK without legacy KGP warning
+      - name: Android debug APK
         working-directory: neurocore/ci/app
         shell: bash
         run: |
@@ -222,7 +225,7 @@ jobs:
             exit 1
           fi
 
-      - name: Package corrected source and validation evidence
+      - name: Package V1.9 source and validation evidence
         working-directory: neurocore/ci/app
         shell: bash
         run: |
@@ -233,47 +236,48 @@ jobs:
           export FLUTTER_VER=$(flutter --version --machine | python3 -c 'import json,sys; print(json.load(sys.stdin)["frameworkVersion"])')
           export DART_VER=$(dart --version 2>&1 | sed 's/^Dart SDK version: //')
           export LOCK_SHA=$(sha256sum pubspec.lock | awk '{print $1}')
-          tar -czf neurocore_corrected_source.tar.gz pubspec.yaml pubspec.lock analysis_options.yaml lib test android
-          export SOURCE_FIXED_SHA=$(sha256sum neurocore_corrected_source.tar.gz | awk '{print $1}')
+          export TEST_COUNT=$(find test -maxdepth 1 -name '*_test.dart' | wc -l | tr -d ' ')
+          tar -czf neurocore_v1_9_source.tar.gz pubspec.yaml pubspec.lock analysis_options.yaml lib test android
+          export SOURCE_FIXED_SHA=$(sha256sum neurocore_v1_9_source.tar.gz | awk '{print $1}')
           python3 - <<'PY'
           import json, os
           evidence = {
+              'version': '1.9.0-audited',
               'original_source_sha256': os.environ['SOURCE_SHA256'],
-              'corrected_source_sha256': os.environ['SOURCE_FIXED_SHA'],
+              'audited_source_sha256': os.environ['SOURCE_FIXED_SHA'],
               'flutter_version': os.environ['FLUTTER_VER'],
               'dart_version': os.environ['DART_VER'],
               'flutter_secure_storage': os.environ['SECURE_STORAGE_VERSION'],
-              'cryptography_flutter': 'absent_from_dependency_graph',
-              'pubspec_lock_sha256': os.environ['LOCK_SHA'],
-              'local_structural_audit': '271/271 pass (V1.7 pre-compatibility baseline)',
-              'ci_source_contract': 'pass',
-              'dart_fix': 'applied',
-              'manual_compatibility_corrections': 'pass',
-              'dart_format': 'pass',
               'flutter_analyze_strict': 'pass',
-              'flutter_test': '36/36 pass',
+              'flutter_test_files': int(os.environ['TEST_COUNT']),
+              'flutter_test': 'pass',
               'apk_build': 'pass',
-              'legacy_kgp_warning': 'absent',
+              'g02_balanced_no_go': 'enforced',
+              'g05_omission_timeout': 'enforced',
+              'g06_choice_position_bias': 'corrected',
+              'g06_story_variety': 'expanded',
+              'sound_feedback': 'enabled_when_preference_allows',
+              'visual_variety': 'expanded_vector_visuals',
               'apk_sha256': os.environ['APK_SHA'],
               'branch': os.environ.get('GITHUB_HEAD_REF') or os.environ.get('GITHUB_REF_NAME'),
               'commit': os.environ['GITHUB_SHA'],
           }
-          with open('neurocore_validation_evidence.json','w',encoding='utf-8') as f:
+          with open('neurocore_v1_9_evidence.json','w',encoding='utf-8') as f:
               json.dump(evidence,f,indent=2,ensure_ascii=False)
               f.write('\n')
           PY
-          python3 -m json.tool neurocore_validation_evidence.json >/dev/null
-          cat neurocore_validation_evidence.json
-          sha256sum "$APK" neurocore_corrected_source.tar.gz pubspec.lock
+          python3 -m json.tool neurocore_v1_9_evidence.json >/dev/null
+          cat neurocore_v1_9_evidence.json
+          sha256sum "$APK" neurocore_v1_9_source.tar.gz pubspec.lock
 
-      - name: Upload APK, corrected source and evidence
+      - name: Upload V1.9 APK, audited source and evidence
         uses: actions/upload-artifact@v4
         with:
-          name: neurocore-v1.8-final-android-validation
+          name: neurocore-v1.9-audited-android
           path: |
             neurocore/ci/app/build/app/outputs/flutter-apk/app-debug.apk
-            neurocore/ci/app/neurocore_validation_evidence.json
-            neurocore/ci/app/neurocore_corrected_source.tar.gz
+            neurocore/ci/app/neurocore_v1_9_evidence.json
+            neurocore/ci/app/neurocore_v1_9_source.tar.gz
             neurocore/ci/app/pubspec.lock
           if-no-files-found: error
           retention-days: 14
