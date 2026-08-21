@@ -1,0 +1,160 @@
+name: NeuroCore Android Validation
+
+on:
+  push:
+    branches:
+      - neurocore-local-v1-7-validation
+    paths:
+      - 'neurocore/**'
+      - '.github/workflows/neurocore-android-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  FLUTTER_VERSION: '3.47.0'
+  SOURCE_SHA256: '0aa63928c44bbacc142db6449abb51abfb91de3bb00d92e07211a465ea39aaf2'
+
+jobs:
+  validate-android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout isolated validation branch
+        uses: actions/checkout@v4
+
+      - name: Reconstruct NeuroCore SSOT archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat \
+            neurocore/ci/source_chunks/chunk_00.b64 \
+            neurocore/ci/source_chunks/chunk_01.b64 \
+            neurocore/ci/source_chunks/chunk_02.b64 \
+            neurocore/ci/source_chunks/chunk_03.b64 \
+            neurocore/ci/source_chunks/chunk_04.b64 \
+            neurocore/ci/source_chunks/chunk_05_00.b64 \
+            neurocore/ci/source_chunks/chunk_05_01.b64 \
+            neurocore/ci/source_chunks/chunk_05_02.b64 \
+            neurocore/ci/source_chunks/chunk_05_03.b64 \
+            neurocore/ci/source_chunks/chunk_06_00.b64 \
+            neurocore/ci/source_chunks/chunk_06_01.b64 \
+            neurocore/ci/source_chunks/chunk_06_02.b64 \
+            neurocore/ci/source_chunks/chunk_06_03.b64 \
+            neurocore/ci/source_chunks/chunk_07.b64 \
+            > neurocore/ci/neurocore_source.b64
+          base64 --decode neurocore/ci/neurocore_source.b64 > neurocore/ci/neurocore_source.tar.gz
+          echo "${SOURCE_SHA256}  neurocore/ci/neurocore_source.tar.gz" | sha256sum --check --strict
+          mkdir -p neurocore/ci/app
+          tar -xzf neurocore/ci/neurocore_source.tar.gz -C neurocore/ci/app
+          test -f neurocore/ci/app/pubspec.yaml
+          test -f neurocore/ci/app/lib/main.dart
+          test -d neurocore/ci/app/test
+
+      - name: Setup Flutter pinned stable
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.0'
+          channel: stable
+          cache: true
+
+      - name: Record toolchain
+        working-directory: neurocore/ci/app
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter --version
+          dart --version
+          java -version
+
+      - name: Structural audit
+        working-directory: neurocore/ci/app
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/structural_audit.py
+
+      - name: Generate Android wrapper without replacing NeuroCore source
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/neurocore_scaffold
+          flutter create --org br.com.neurocore --project-name neurocore_app --platforms=android /tmp/neurocore_scaffold
+          cp -a /tmp/neurocore_scaffold/android neurocore/ci/app/android
+          python3 - <<'PY'
+          from pathlib import Path
+          root = Path('neurocore/ci/app')
+          kts = root/'android/app/build.gradle.kts'
+          groovy = root/'android/app/build.gradle'
+          if kts.exists():
+              s = kts.read_text()
+              s = s.replace('minSdk = flutter.minSdkVersion', 'minSdk = 24')
+              s = s.replace('minSdk = 23', 'minSdk = 24')
+              kts.write_text(s)
+          elif groovy.exists():
+              s = groovy.read_text()
+              s = s.replace('minSdkVersion flutter.minSdkVersion', 'minSdkVersion 24')
+              s = s.replace('minSdkVersion 23', 'minSdkVersion 24')
+              groovy.write_text(s)
+          manifest = root/'android/app/src/main/AndroidManifest.xml'
+          s = manifest.read_text()
+          if 'android:allowBackup=' not in s:
+              s = s.replace('<application', '<application android:allowBackup="false"', 1)
+          if 'android:usesCleartextTraffic=' not in s:
+              s = s.replace('<application', '<application android:usesCleartextTraffic="false"', 1)
+          manifest.write_text(s)
+          PY
+
+      - name: Flutter pub get
+        working-directory: neurocore/ci/app
+        run: flutter pub get
+
+      - name: Flutter analyze
+        working-directory: neurocore/ci/app
+        run: flutter analyze
+
+      - name: Flutter tests
+        working-directory: neurocore/ci/app
+        run: flutter test --reporter expanded
+
+      - name: Android debug APK
+        working-directory: neurocore/ci/app
+        run: flutter build apk --debug
+
+      - name: Generate validation evidence
+        working-directory: neurocore/ci/app
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=build/app/outputs/flutter-apk/app-debug.apk
+          test -s "$APK"
+          APK_SHA=$(sha256sum "$APK" | awk '{print $1}')
+          FLUTTER_VER=$(flutter --version --machine | python3 -c 'import json,sys; print(json.load(sys.stdin)["frameworkVersion"])')
+          DART_VER=$(dart --version 2>&1 | sed 's/^Dart SDK version: //')
+          cat > neurocore_validation_evidence.json <<EOF
+          {
+            "source_sha256": "${SOURCE_SHA256}",
+            "flutter_version": "${FLUTTER_VER}",
+            "dart_version": "${DART_VER}",
+            "structural_audit": "pass",
+            "flutter_analyze": "pass",
+            "flutter_test": "pass",
+            "apk_build": "pass",
+            "apk_sha256": "${APK_SHA}",
+            "branch": "${GITHUB_REF_NAME}",
+            "commit": "${GITHUB_SHA}"
+          }
+          EOF
+          cat neurocore_validation_evidence.json
+          sha256sum "$APK"
+
+      - name: Upload APK and evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: neurocore-v1.7-android-validation
+          path: |
+            neurocore/ci/app/build/app/outputs/flutter-apk/app-debug.apk
+            neurocore/ci/app/neurocore_validation_evidence.json
+          if-no-files-found: error
+          retention-days: 14
