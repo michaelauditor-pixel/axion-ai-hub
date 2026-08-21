@@ -76,7 +76,6 @@ jobs:
               raise SystemExit('legacy cryptography_flutter plugin remains')
           p.write_text(s)
           PY
-          grep -nE 'cryptography|flutter_secure_storage' pubspec.yaml
 
       - name: Setup Flutter pinned stable
         uses: subosito/flutter-action@v2
@@ -119,11 +118,7 @@ jobs:
           if missing:
               raise SystemExit('Missing required CI source files: ' + ', '.join(missing))
           pubspec = (root/'pubspec.yaml').read_text()
-          forbidden = [
-              'google_mobile_ads', 'firebase_analytics', 'facebook_app_events',
-              'amplitude_flutter', 'mixpanel_flutter', 'geolocator',
-              'app_tracking_transparency'
-          ]
+          forbidden = ['google_mobile_ads','firebase_analytics','facebook_app_events','amplitude_flutter','mixpanel_flutter','geolocator','app_tracking_transparency']
           bad = [x for x in forbidden if x in pubspec]
           if bad:
               raise SystemExit('Forbidden child-directed dependency: ' + ', '.join(bad))
@@ -181,18 +176,32 @@ jobs:
           s = s.replace('const FlutterSecureStorage _secureStorage = FlutterSecureStorage();','final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();')
           s = s.replace('const FlutterSecureStorage _secureStorage = const FlutterSecureStorage();','final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();')
           crypto.write_text(s)
+
           main = Path('lib/main.dart')
           s = main.read_text()
           s = s.replace("import 'package:cryptography_flutter/cryptography_flutter.dart';\n", '')
           s = s.replace('  FlutterCryptography.enable();\n', '')
           s = s.replace('FlutterCryptography.enable();\n', '')
           main.write_text(s)
+
+          pub = Path('pubspec.yaml')
+          s = pub.read_text()
+          lines = [line for line in s.splitlines() if not line.strip().startswith('cryptography_flutter:')]
+          pub.write_text('\n'.join(lines) + '\n')
+
           if 'const FlutterSecureStorage _secureStorage' in crypto.read_text():
               raise SystemExit('invalid const instance field remains')
           if 'FlutterCryptography.enable()' in main.read_text():
               raise SystemExit('deprecated FlutterCryptography.enable remains')
+          if 'cryptography_flutter:' in pub.read_text():
+              raise SystemExit('legacy cryptography_flutter dependency remains after dart fix')
           PY
           dart format lib test
+          flutter pub get
+          if flutter pub deps --style=compact | grep -q '^cryptography_flutter '; then
+            echo 'cryptography_flutter still present in dependency graph' >&2
+            exit 1
+          fi
 
       - name: Flutter analyze strict
         working-directory: neurocore/ci/app
@@ -202,7 +211,7 @@ jobs:
         working-directory: neurocore/ci/app
         run: flutter test --reporter expanded
 
-      - name: Android debug APK
+      - name: Android debug APK without legacy KGP warning
         working-directory: neurocore/ci/app
         shell: bash
         run: |
@@ -234,7 +243,7 @@ jobs:
               'flutter_version': os.environ['FLUTTER_VER'],
               'dart_version': os.environ['DART_VER'],
               'flutter_secure_storage': os.environ['SECURE_STORAGE_VERSION'],
-              'cryptography_flutter': 'removed',
+              'cryptography_flutter': 'absent_from_dependency_graph',
               'pubspec_lock_sha256': os.environ['LOCK_SHA'],
               'local_structural_audit': '271/271 pass (V1.7 pre-compatibility baseline)',
               'ci_source_contract': 'pass',
