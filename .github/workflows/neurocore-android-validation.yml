@@ -32,6 +32,7 @@ jobs:
         working-directory: neurocore/ci/app
         shell: bash
         run: |
+          set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
           p=Path('pubspec.yaml'); s=p.read_text().replace('flutter_secure_storage: ^11.0.0','flutter_secure_storage: 10.3.1')
@@ -82,11 +83,10 @@ jobs:
           set -e
           REJECTS=$(find . -name '*.rej' -print)
           if [ -n "$REJECTS" ]; then
-            echo "$REJECTS"
             BAD=$(echo "$REJECTS" | grep -v '^./lib/features/g06_social/g06_screen.dart.rej$' || true)
-            if [ -n "$BAD" ]; then echo "Unexpected patch reject" >&2; exit 1; fi
+            if [ -n "$BAD" ]; then echo "$BAD"; exit 1; fi
           elif [ "$PATCH_STATUS" -ne 0 ]; then
-            echo "Patch failed without expected G06 reject" >&2; exit 1
+            exit 1
           fi
           cd ../../..
           cp -a neurocore/ci/v1_9_overlay/. neurocore/ci/app/
@@ -97,6 +97,7 @@ jobs:
           p=Path('pubspec.yaml'); s=p.read_text().replace('version: 1.7.0+17','version: 1.9.0+19').replace('NeuroCore V1.7 FINAL RC2','NeuroCore V1.9 AUDITED'); p.write_text(s)
           h=Path('lib/features/home/home_screen.dart'); s=h.read_text().replace('V1.7 FINAL RC2 • local • 6 jogos • acessível • privacidade • sessão selada • ML shadow/fail-closed','V1.9 AUDITED • 6 jogos • VÁ/PARE balanceado • sons/háptica • mais variedade visual • privacidade • ML shadow/fail-closed'); h.write_text(s)
           PY
+          dart fix --apply
           dart format lib test
           flutter pub get
           grep -q 'generateBlock' lib/features/g02_inhibition/inhibition_trial.dart
