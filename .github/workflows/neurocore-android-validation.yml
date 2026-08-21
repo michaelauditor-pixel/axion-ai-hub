@@ -21,6 +21,7 @@ permissions:
 env:
   FLUTTER_VERSION: '3.47.0'
   SOURCE_SHA256: '0aa63928c44bbacc142db6449abb51abfb91de3bb00d92e07211a465ea39aaf2'
+  SECURE_STORAGE_VERSION: '10.3.1'
 
 jobs:
   validate-android:
@@ -57,6 +58,22 @@ jobs:
           test -f neurocore/ci/app/pubspec.yaml
           test -f neurocore/ci/app/lib/main.dart
           test -d neurocore/ci/app/test
+
+      - name: Pin Android-compatible secure storage
+        working-directory: neurocore/ci/app
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('pubspec.yaml')
+          s = p.read_text()
+          s = s.replace('flutter_secure_storage: ^11.0.0', 'flutter_secure_storage: 10.3.1')
+          if 'flutter_secure_storage: 10.3.1' not in s:
+              raise SystemExit('secure storage pin not applied')
+          p.write_text(s)
+          PY
+          grep -n 'flutter_secure_storage' pubspec.yaml
 
       - name: Setup Flutter pinned stable
         uses: subosito/flutter-action@v2
@@ -148,9 +165,17 @@ jobs:
         working-directory: neurocore/ci/app
         run: flutter pub get
 
-      - name: Flutter analyze compile gate
+      - name: Apply safe Dart fixes and format
         working-directory: neurocore/ci/app
-        run: flutter analyze --no-fatal-infos
+        shell: bash
+        run: |
+          set -euo pipefail
+          dart fix --apply
+          dart format lib test
+
+      - name: Flutter analyze strict
+        working-directory: neurocore/ci/app
+        run: flutter analyze
 
       - name: Flutter tests
         working-directory: neurocore/ci/app
@@ -160,7 +185,7 @@ jobs:
         working-directory: neurocore/ci/app
         run: flutter build apk --debug
 
-      - name: Generate validation evidence
+      - name: Package corrected source and validation evidence
         working-directory: neurocore/ci/app
         shell: bash
         run: |
@@ -170,15 +195,22 @@ jobs:
           APK_SHA=$(sha256sum "$APK" | awk '{print $1}')
           FLUTTER_VER=$(flutter --version --machine | python3 -c 'import json,sys; print(json.load(sys.stdin)["frameworkVersion"])')
           DART_VER=$(dart --version 2>&1 | sed 's/^Dart SDK version: //')
+          LOCK_SHA=$(sha256sum pubspec.lock | awk '{print $1}')
+          tar -czf neurocore_corrected_source.tar.gz pubspec.yaml pubspec.lock analysis_options.yaml lib test
+          SOURCE_FIXED_SHA=$(sha256sum neurocore_corrected_source.tar.gz | awk '{print $1}')
           cat > neurocore_validation_evidence.json <<EOF
           {
-            "source_sha256": "${SOURCE_SHA256}",
+            "original_source_sha256": "${SOURCE_SHA256}",
+            "corrected_source_sha256": "${SOURCE_FIXED_SHA}",
             "flutter_version": "${FLUTTER_VER}",
             "dart_version": "${DART_VER}",
-            "local_structural_audit": "271/271 pass (separate local gate)",
+            "flutter_secure_storage": "${SECURE_STORAGE_VERSION}",
+            "pubspec_lock_sha256": "${LOCK_SHA}",
+            "local_structural_audit": "271/271 pass (V1.7 pre-compatibility baseline)",
             "ci_source_contract": "pass",
-            "flutter_analyze_compile_gate": "pass_with_nonfatal_infos",
-            "flutter_analyze_strict": "pending_lint_cleanup",
+            "dart_fix": "applied",
+            "dart_format": "pass",
+            "flutter_analyze_strict": "pass",
             "flutter_test": "pass",
             "apk_build": "pass",
             "apk_sha256": "${APK_SHA}",
@@ -187,14 +219,16 @@ jobs:
           }
           EOF
           cat neurocore_validation_evidence.json
-          sha256sum "$APK"
+          sha256sum "$APK" neurocore_corrected_source.tar.gz pubspec.lock
 
-      - name: Upload APK and evidence
+      - name: Upload APK, corrected source and evidence
         uses: actions/upload-artifact@v4
         with:
-          name: neurocore-v1.7-android-validation
+          name: neurocore-v1.8-android-validation
           path: |
             neurocore/ci/app/build/app/outputs/flutter-apk/app-debug.apk
             neurocore/ci/app/neurocore_validation_evidence.json
+            neurocore/ci/app/neurocore_corrected_source.tar.gz
+            neurocore/ci/app/pubspec.lock
           if-no-files-found: error
           retention-days: 14
