@@ -1,0 +1,141 @@
+name: NeuroCore Play Store Preflight
+
+on:
+  push:
+    branches: [neurocore-local-v1-7-validation]
+    paths:
+      - '.github/workflows/neurocore-playstore-preflight.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  FLUTTER_VERSION: '3.47.0'
+  TARGET_API: '36'
+
+jobs:
+  playstore-preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download latest validated V1.9 source artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          RUN_ID=$(gh run list \
+            --repo "${GITHUB_REPOSITORY}" \
+            --workflow "NeuroCore Android Validation" \
+            --branch "neurocore-local-v1-7-validation" \
+            --status success \
+            --limit 1 \
+            --json databaseId \
+            --jq '.[0].databaseId')
+          test -n "$RUN_ID"
+          mkdir -p /tmp/nc-artifact neurocore/ci/playstore-app
+          gh run download "$RUN_ID" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --name neurocore-v1.9-audited-android \
+            --dir /tmp/nc-artifact
+          test -s /tmp/nc-artifact/neurocore_v1_9_source.tar.gz
+          tar -xzf /tmp/nc-artifact/neurocore_v1_9_source.tar.gz -C neurocore/ci/playstore-app
+          cp /tmp/nc-artifact/neurocore_v1_9_evidence.json neurocore/ci/playstore-app/v1_9_source_evidence.json
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.0'
+          channel: stable
+          cache: true
+
+      - name: Install Android API 36
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMANAGER=$(find "${ANDROID_HOME}/cmdline-tools" -type f -name sdkmanager | sort | tail -1)
+          test -x "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Enforce Play target API 36
+        working-directory: neurocore/ci/playstore-app
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('android/app/build.gradle.kts')
+          s = p.read_text()
+          s = s.replace('compileSdk = flutter.compileSdkVersion', 'compileSdk = 36')
+          s = s.replace('targetSdk = flutter.targetSdkVersion', 'targetSdk = 36')
+          if 'compileSdk = 36' not in s or 'targetSdk = 36' not in s:
+              raise SystemExit('API 36 enforcement failed')
+          p.write_text(s)
+          PY
+          grep -q 'compileSdk = 36' android/app/build.gradle.kts
+          grep -q 'targetSdk = 36' android/app/build.gradle.kts
+          grep -q 'minSdk = 24' android/app/build.gradle.kts
+
+      - name: Flutter analyze strict
+        working-directory: neurocore/ci/playstore-app
+        run: |
+          flutter pub get
+          flutter analyze
+
+      - name: Flutter tests complete
+        working-directory: neurocore/ci/playstore-app
+        run: flutter test --reporter expanded
+
+      - name: Build Play preflight AAB
+        working-directory: neurocore/ci/playstore-app
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter build appbundle --release 2>&1 | tee /tmp/aab-build.log
+          AAB=build/app/outputs/bundle/release/app-release.aab
+          test -s "$AAB"
+          cp "$AAB" build/app/outputs/bundle/release/NeuroCore_V1.9_API36_PREFLIGHT.aab
+          ! grep -q 'plugins that apply Kotlin Gradle Plugin' /tmp/aab-build.log
+
+      - name: Create Play preflight evidence
+        working-directory: neurocore/ci/playstore-app
+        shell: bash
+        run: |
+          set -euo pipefail
+          AAB=build/app/outputs/bundle/release/NeuroCore_V1.9_API36_PREFLIGHT.aab
+          AAB_SHA=$(sha256sum "$AAB" | awk '{print $1}')
+          AAB_BYTES=$(stat -c%s "$AAB")
+          python3 - "$AAB_SHA" "$AAB_BYTES" <<'PY'
+          import json, sys
+          data = {
+            'version': '1.9.0+19',
+            'playstore_preflight': 'pass',
+            'compile_sdk': 36,
+            'target_sdk': 36,
+            'min_sdk': 24,
+            'flutter_analyze_strict': 'pass',
+            'flutter_tests': 'pass',
+            'aab_build': 'pass',
+            'aab_sha256': sys.argv[1],
+            'aab_bytes': int(sys.argv[2]),
+            'signing_status': 'preflight_debug_key_placeholder',
+            'production_upload_key_required': True,
+            'child_privacy_baseline': 'no_ads_no_third_party_analytics_no_location_no_open_chat'
+          }
+          open('neurocore_playstore_preflight_evidence.json','w').write(json.dumps(data, indent=2) + '\n')
+          PY
+          cat neurocore_playstore_preflight_evidence.json
+
+      - name: Upload API 36 preflight artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: neurocore-v1.9-playstore-api36-preflight
+          path: |
+            neurocore/ci/playstore-app/build/app/outputs/bundle/release/NeuroCore_V1.9_API36_PREFLIGHT.aab
+            neurocore/ci/playstore-app/neurocore_playstore_preflight_evidence.json
+          if-no-files-found: error
+          retention-days: 14
