@@ -5,6 +5,11 @@ on:
     branches: [neurocore-local-v1-7-validation]
     paths:
       - '.github/workflows/neurocore-playstore-preflight.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/neurocore-playstore-preflight.yml'
+      - 'neurocore/**'
   workflow_dispatch:
 
 permissions:
