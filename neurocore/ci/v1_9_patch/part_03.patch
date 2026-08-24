@@ -1,0 +1,205 @@
+     await _record('block_started', {
+@@ -161,6 +162,11 @@
+       if (trial.isSwitch) _blockPerformance.correctSwitchTrials += 1;
+     }
+     if (perseverative) _blockPerformance.perseverativeErrors += 1;
++    if (correct) {
++      await widget.services.feedback.correct();
++    } else {
++      await widget.services.feedback.gentleMiss();
++    }
+ 
+     await _record('flexibility_response', {
+       'block': _blockIndex,
+@@ -187,6 +193,7 @@
+     if (trial == null || _resolved || _completed) return;
+     _resolved = true;
+     _blockPerformance.omissions += 1;
++    await widget.services.feedback.gentleMiss();
+     await _record('flexibility_response', {
+       'block': _blockIndex,
+       'trial': _trialIndex,
+@@ -320,6 +327,7 @@
+       features: features,
+     );
+     _completed = true;
++    await widget.services.feedback.complete();
+     if (mounted) setState(() {});
+   }
+ 
+diff -ruN source_before/lib/features/g05_regulation/g05_screen.dart source_after/lib/features/g05_regulation/g05_screen.dart
+--- source_before/lib/features/g05_regulation/g05_screen.dart	2026-08-21 13:15:46.000000000 +0000
++++ source_after/lib/features/g05_regulation/g05_screen.dart	2026-08-21 14:47:33.207143391 +0000
+@@ -6,6 +6,7 @@
+ import '../../core/adaptive/regulation_adaptive_engine.dart';
+ import '../../core/adaptive/regulation_performance_snapshot.dart';
+ import '../../core/bootstrap/app_services.dart';
++import '../../widgets/game_visual_strip.dart';
+ import 'regulation_difficulty_config.dart';
+ 
+ class G05RegulationScreen extends StatefulWidget {
+@@ -29,19 +30,41 @@
+     'Alongar as mãos',
+     'Escolher um pensamento gentil',
+   ];
++
+   final _engine = const RegulationAdaptiveEngine();
+   AdaptiveState _state = AdaptiveState.initial();
+   String? _sessionId;
++  Timer? _roundTimer;
+   int _round = 0;
+   int _completed = 0;
+   int _premature = 0;
+-  final int _omissions = 0;
++  int _omissions = 0;
+   final List<int> _times = [];
+   DateTime? _started;
+   bool _done = false;
+   bool _busy = false;
++  bool _closing = false;
+   String _feedback = 'Suba a montanha no seu ritmo.';
+ 
++  @override
++  void dispose() {
++    _roundTimer?.cancel();
++    if (_sessionId != null && !_done && !_closing) {
++      _abandonSilently();
++    }
++    super.dispose();
++  }
++
++
++  List<String> _visibleStrategies(RegulationDifficultyConfig config) {
++    final start = (_round - 1).clamp(0, 1000) % _strategies.length;
++    final rotated = <String>[
++      for (var i = 0; i < _strategies.length; i += 1)
++        _strategies[(start + i) % _strategies.length],
++    ];
++    return rotated.take(config.choiceCount).toList();
++  }
++
+   Future<void> _start() async {
+     if (_sessionId != null) return;
+     _sessionId = await widget.services.repository.startSession(
+@@ -51,17 +74,30 @@
+     await _record('session_started', {
+       'game_id': _gameId,
+       'mode': 'neuroeducational_non_diagnostic',
++      'omission_timeout_enabled': true,
+     });
++    await widget.services.feedback.start();
+     if (!mounted) return;
+     setState(() {
+       _round = 1;
+       _started = DateTime.now();
+     });
++    _armRoundTimer();
++  }
++
++  void _armRoundTimer() {
++    _roundTimer?.cancel();
++    final config = RegulationDifficultyConfig.forLevel(_state.level);
++    _roundTimer = Timer(
++      Duration(milliseconds: config.responseWindowMs),
++      _handleOmission,
++    );
+   }
+ 
+   Future<void> _choose(String strategy) async {
+     if (_busy || _done || _sessionId == null) return;
+     _busy = true;
++    _roundTimer?.cancel();
+     final elapsed = DateTime.now()
+         .difference(_started ?? DateTime.now())
+         .inMilliseconds;
+@@ -75,17 +111,38 @@
+       'completion_time_ms': elapsed,
+       'difficulty': _state.level,
+     });
++    await widget.services.feedback.correct();
+     if (!mounted) return;
+     setState(
+       () => _feedback =
+           'Boa escolha. Agora siga o ritmo por ${config.pacingSeconds} segundos.',
+     );
+     await Future<void>.delayed(Duration(seconds: config.pacingSeconds));
++    _busy = false;
+     await _advance();
++  }
++
++  Future<void> _handleOmission() async {
++    if (_busy || _done || _sessionId == null) return;
++    _busy = true;
++    _omissions += 1;
++    await _record('regulation_prompt_omitted', {
++      'round': _round,
++      'difficulty': _state.level,
++    });
++    await widget.services.feedback.gentleMiss();
++    if (!mounted) return;
++    setState(
++      () => _feedback =
++          'Sem problema. Esta parada passou e vamos seguir para a próxima.',
++    );
++    await Future<void>.delayed(const Duration(milliseconds: 750));
+     _busy = false;
++    await _advance();
+   }
+ 
+   Future<void> _advance() async {
++    _roundTimer?.cancel();
+     if (_round >= 6) {
+       await _finish();
+       return;
+@@ -112,9 +169,11 @@
+       _started = DateTime.now();
+       _feedback = 'Escolha uma estratégia e experimente.';
+     });
++    _armRoundTimer();
+   }
+ 
+   Future<void> _finish() async {
++    _roundTimer?.cancel();
+     final snapshot = RegulationPerformanceSnapshot(
+       prompts: 6,
+       completedStrategies: _completed,
+@@ -139,8 +198,10 @@
+       summary: summary,
+       features: features,
+     );
++    _done = true;
++    await widget.services.feedback.complete();
+     if (!mounted) return;
+-    setState(() => _done = true);
++    setState(() {});
+   }
+ 
+   Future<void> _record(String type, Map<String, Object?> payload) async {
+@@ -153,6 +214,23 @@
+     );
+   }
+ 
++  Future<void> _abandonSilently() async {
++    _closing = true;
++    _roundTimer?.cancel();
++    final id = _sessionId;
++    if (id == null) return;
++    try {
++      await widget.services.telemetry.record(
++        sessionId: id,
++        eventType: 'session_abandoned',
++        payload: {'round': _round},
++      );
++      await widget.services.repository.abandonSession(sessionId: id);
++    } catch (_) {
++      // Dispose deve permanecer silencioso.
++    }
++  }
++
+   @override
+   Widget build(BuildContext context) {
+     final config = RegulationDifficultyConfig.forLevel(_state.level);
+@@ -166,7 +244,10 @@
+                   child: Column(
+                     mainAxisSize: MainAxisSize.min,
+                     children: [

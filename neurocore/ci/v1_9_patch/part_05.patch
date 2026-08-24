@@ -1,0 +1,198 @@
+ import '../../core/adaptive/social_performance_snapshot.dart';
+ import '../../core/bootstrap/app_services.dart';
++import '../../widgets/game_visual_strip.dart';
+ import 'social_scenario.dart';
+ 
+ class G06SocialScreen extends StatefulWidget {
+@@ -14,69 +18,146 @@
+   });
+   final AppServices services;
+   final String profileId;
++
+   @override
+   State<G06SocialScreen> createState() => _G06SocialScreenState();
+ }
+ 
+ class _G06SocialScreenState extends State<G06SocialScreen> {
+   static const _gameId = 'G06_mundo_amigos';
++  static const _trialsPerSession = 6;
++
+   final _engine = const SocialAdaptiveEngine();
++  final Random _random = Random.secure();
+   AdaptiveState _state = AdaptiveState.initial();
+   String? _sessionId;
++  Timer? _responseTimer;
++  List<SocialScenario> _scenarioOrder = const [];
++  PresentedSocialScenario? _presented;
+   int _index = 0;
++  int _preferredPositionOffset = 0;
+   int _matches = 0;
+   int _supportive = 0;
+-  final int _omissions = 0;
++  int _omissions = 0;
+   final List<int> _times = [];
+   DateTime? _started;
+   bool _done = false;
++  bool _resolved = false;
++  bool _closing = false;
+   String _feedback =
+       'Escolha uma resposta que respeite as pessoas da história.';
+ 
++  @override
++  void dispose() {
++    _responseTimer?.cancel();
++    if (_sessionId != null && !_done && !_closing) {
++      _abandonSilently();
++    }
++    super.dispose();
++  }
++
++  int get _responseWindowMs {
++    const windows = [18000, 16500, 15000, 13500, 12000];
++    return windows[_state.level.clamp(1, 5).toInt() - 1];
++  }
++
+   Future<void> _start() async {
++    if (_sessionId != null) return;
+     _sessionId = await widget.services.repository.startSession(
+       profileId: widget.profileId,
+       gameId: _gameId,
+     );
+-    _started = DateTime.now();
++    _scenarioOrder = List<SocialScenario>.of(SocialScenario.examples)
++      ..shuffle(_random);
++    _preferredPositionOffset = _random.nextInt(3);
+     await _record('session_started', {
+       'game_id': _gameId,
+       'mode': 'social_learning_non_diagnostic',
++      'scenario_pool': SocialScenario.examples.length,
++      'trials_planned': _trialsPerSession,
++      'choice_order_randomized': true,
++      'omission_timeout_enabled': true,
+     });
+-    if (mounted) setState(() {});
++    await widget.services.feedback.start();
++    if (!mounted) return;
++    setState(() {});
++    _prepareTrial();
++  }
++
++  void _prepareTrial() {
++    _responseTimer?.cancel();
++    final scenario = _scenarioOrder[_index];
++    final choiceCount = _state.level <= 2 ? 2 : 3;
++    _presented = scenario.present(
++      random: _random,
++      choiceCount: choiceCount,
++      preferredPosition: (_index + _preferredPositionOffset) % choiceCount,
++    );
++    _resolved = false;
++    _started = DateTime.now();
++    _responseTimer = Timer(
++      Duration(milliseconds: _responseWindowMs),
++      _handleOmission,
++    );
+   }
+ 
+   Future<void> _choose(int choice) async {
+-    final scenario =
+-        SocialScenario.examples[_index % SocialScenario.examples.length];
++    final presented = _presented;
++    if (presented == null || _resolved || _done) return;
++    _resolved = true;
++    _responseTimer?.cancel();
+     final elapsed = DateTime.now()
+         .difference(_started ?? DateTime.now())
+         .inMilliseconds;
+-    final correct = choice == scenario.preferredIndex;
+-    if (correct) {
+-      _matches++;
+-      _supportive++;
++    final matched = choice == presented.preferredIndex;
++    if (matched) {
++      _matches += 1;
++      _supportive += 1;
++      await widget.services.feedback.correct();
++    } else {
++      await widget.services.feedback.gentleMiss();
+     }
+     _times.add(elapsed);
+     await _record('social_choice', {
+       'trial': _index + 1,
+-      'choice_index': choice,
+-      'context_match': correct,
++      'choice_display_index': choice,
++      'choice_text': presented.choices[choice],
++      'preferred_display_index': presented.preferredIndex,
++      'context_match': matched,
+       'reaction_time_ms': elapsed,
+     });
+     if (!mounted) return;
+     setState(
+-      () => _feedback = correct
++      () => _feedback = matched
+           ? 'Boa leitura da situação.'
+           : 'Outra resposta pode respeitar melhor o que a pessoa precisa.',
+     );
+-    await Future<void>.delayed(const Duration(milliseconds: 900));
++    await Future<void>.delayed(const Duration(milliseconds: 850));
++    await _next();
++  }
++
++  Future<void> _handleOmission() async {
++    if (_resolved || _done || _presented == null) return;
++    _resolved = true;
++    _omissions += 1;
++    await _record('social_choice_omitted', {
++      'trial': _index + 1,
++      'response_window_ms': _responseWindowMs,
++    });
++    await widget.services.feedback.gentleMiss();
++    if (!mounted) return;
++    setState(
++      () => _feedback =
++          'Tudo bem. Esta história passou e vamos conhecer outra situação.',
++    );
++    await Future<void>.delayed(const Duration(milliseconds: 800));
+     await _next();
+   }
+ 
+   Future<void> _next() async {
++    _responseTimer?.cancel();
+     final completed = _index + 1;
+-    if (completed >= 6) {
++    if (completed >= _trialsPerSession) {
+       await _finish();
+       return;
+     }
+@@ -88,25 +169,27 @@
+         omissions: _omissions,
+         reactionTimesMs: _times,
+       );
+-      final d = _engine.evaluate(state: _state, performance: perf);
+-      _state = d.nextState;
++      final decision = _engine.evaluate(state: _state, performance: perf);
++      _state = decision.nextState;
+       await _record('difficulty_reviewed', {
+         'trial': completed,
+         'difficulty_after': _state.level,
+-        'reason': d.reasonCode,
++        'reason': decision.reasonCode,
+       });
+     }
+     if (!mounted) return;
+     setState(() {
+-      _index++;
+-      _started = DateTime.now();
++      _index += 1;
+       _feedback = 'Leia a situação e escolha com calma.';
+     });
++    _prepareTrial();
++    if (mounted) setState(() {});
+   }
+ 
+   Future<void> _finish() async {
++    _responseTimer?.cancel();
+     final perf = SocialPerformanceSnapshot(
+-      trials: 6,
++      trials: _trialsPerSession,

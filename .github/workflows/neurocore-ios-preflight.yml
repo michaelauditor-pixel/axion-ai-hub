@@ -1,0 +1,155 @@
+name: NeuroCore iOS Preflight
+
+on:
+  push:
+    branches: [neurocore-local-v1-7-validation]
+    paths:
+      - '.github/workflows/neurocore-ios-preflight.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/neurocore-ios-preflight.yml'
+      - 'neurocore/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  ios-preflight:
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download latest validated V1.9 source artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          RUN_ID=$(gh run list \
+            --repo "${GITHUB_REPOSITORY}" \
+            --workflow "NeuroCore Android Validation" \
+            --branch "neurocore-local-v1-7-validation" \
+            --status success \
+            --limit 1 \
+            --json databaseId \
+            --jq '.[0].databaseId')
+          test -n "$RUN_ID"
+          mkdir -p /tmp/nc-artifact neurocore/ci/ios-app
+          gh run download "$RUN_ID" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --name neurocore-v1.9-audited-android \
+            --dir /tmp/nc-artifact
+          test -s /tmp/nc-artifact/neurocore_v1_9_source.tar.gz
+          tar -xzf /tmp/nc-artifact/neurocore_v1_9_source.tar.gz -C neurocore/ci/ios-app
+          rm -rf neurocore/ci/ios-app/android
+
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: 'latest-stable'
+
+      - name: Verify Xcode/iOS SDK submission floor
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodebuild -version
+          SDK=$(xcrun --sdk iphoneos --show-sdk-version)
+          echo "IOS_SDK=$SDK"
+          python3 - "$SDK" <<'PY'
+          import sys
+          major=int(sys.argv[1].split('.')[0])
+          if major < 26:
+              raise SystemExit(f'iOS SDK {sys.argv[1]} is below required 26')
+          PY
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.0'
+          channel: stable
+          cache: true
+
+      - name: Generate iOS wrapper
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/ncios
+          flutter create --org br.com.neurocore --project-name neurocore_app --platforms=ios /tmp/ncios
+          cp -a /tmp/ncios/ios neurocore/ci/ios-app/ios
+          python3 - <<'PY'
+          from pathlib import Path
+          root=Path('neurocore/ci/ios-app/ios')
+          pod=root/'Podfile'
+          if pod.exists():
+              s=pod.read_text()
+              if "platform :ios" in s:
+                  import re
+                  s=re.sub(r"platform :ios,\s*'[^']+'", "platform :ios, '15.0'", s)
+              else:
+                  s="platform :ios, '15.0'\n"+s
+              pod.write_text(s)
+          pbx=root/'Runner.xcodeproj/project.pbxproj'
+          s=pbx.read_text().replace('IPHONEOS_DEPLOYMENT_TARGET = 13.0;', 'IPHONEOS_DEPLOYMENT_TARGET = 15.0;').replace('IPHONEOS_DEPLOYMENT_TARGET = 12.0;', 'IPHONEOS_DEPLOYMENT_TARGET = 15.0;')
+          pbx.write_text(s)
+          PY
+
+      - name: Flutter analyze strict on macOS
+        working-directory: neurocore/ci/ios-app
+        run: |
+          flutter pub get
+          flutter analyze
+
+      - name: Flutter tests on macOS
+        working-directory: neurocore/ci/ios-app
+        run: flutter test --reporter expanded
+
+      - name: Build iOS release without codesign
+        working-directory: neurocore/ci/ios-app
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter build ios --release --no-codesign 2>&1 | tee /tmp/ios-build.log
+          test -d build/ios/iphoneos/Runner.app
+          ! grep -q 'error:' /tmp/ios-build.log
+
+      - name: Create iOS preflight evidence
+        working-directory: neurocore/ci/ios-app
+        shell: bash
+        run: |
+          set -euo pipefail
+          XCODE=$(xcodebuild -version | tr '\n' ' ')
+          SDK=$(xcrun --sdk iphoneos --show-sdk-version)
+          tar -czf NeuroCore_V1.9_IOS26_PREFLIGHT_RunnerApp.tar.gz -C build/ios/iphoneos Runner.app
+          SHA=$(shasum -a 256 NeuroCore_V1.9_IOS26_PREFLIGHT_RunnerApp.tar.gz | awk '{print $1}')
+          BYTES=$(stat -f%z NeuroCore_V1.9_IOS26_PREFLIGHT_RunnerApp.tar.gz)
+          python3 - "$XCODE" "$SDK" "$SHA" "$BYTES" <<'PY'
+          import json,sys
+          data={
+            'version':'1.9.0+19',
+            'ios_preflight':'pass',
+            'xcode':sys.argv[1].strip(),
+            'ios_sdk':sys.argv[2],
+            'deployment_target':'15.0',
+            'flutter_analyze_strict':'pass',
+            'flutter_tests':'pass',
+            'ios_release_no_codesign':'pass',
+            'runner_app_tar_sha256':sys.argv[3],
+            'runner_app_tar_bytes':int(sys.argv[4]),
+            'codesigning_status':'pending_apple_distribution_credentials',
+            'kids_baseline':'parental_gate_no_ads_no_third_party_analytics_no_open_chat'
+          }
+          open('neurocore_ios_preflight_evidence.json','w').write(json.dumps(data,indent=2)+'\n')
+          PY
+          cat neurocore_ios_preflight_evidence.json
+
+      - name: Upload iOS preflight artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: neurocore-v1.9-ios26-preflight
+          path: |
+            neurocore/ci/ios-app/NeuroCore_V1.9_IOS26_PREFLIGHT_RunnerApp.tar.gz
+            neurocore/ci/ios-app/neurocore_ios_preflight_evidence.json
+          if-no-files-found: error
+          retention-days: 14
