@@ -12,7 +12,7 @@ permissions:
 env:
   FLUTTER_VERSION: '3.47.0'
   SOURCE_SHA256: '0aa63928c44bbacc142db6449abb51abfb91de3bb00d92e07211a465ea39aaf2'
-  V20_PATCH_GZ_SHA256: 'ea08f20dfdf05a7de800d8e466a505e925f2eef5b78164e8b2f5d2e4fc8eb236'
+  V20_PATCH_GZ_SHA256: '52071cb9f30b696cadc23f72b0c171b95617501fe1f6ebf11d25659b929590f8'
 jobs:
   validate-android:
     runs-on: ubuntu-latest
