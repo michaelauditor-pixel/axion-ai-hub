@@ -1,0 +1,177 @@
+text context) {
++    final progress = (stepIndex + 1) / exercise.steps.length;
++    return Container(
++      padding: const EdgeInsets.all(22),
++      decoration: BoxDecoration(
++        color: const Color(0xFFEAF8F2),
++        borderRadius: BorderRadius.circular(28),
++      ),
++      child: Column(
++        mainAxisAlignment: MainAxisAlignment.center,
++        children: [
++          Icon(exercise.icon, size: 84, color: const Color(0xFF27856E)),
++          const SizedBox(height: 18),
++          Text(
++            exercise.title,
++            textAlign: TextAlign.center,
++            style: const TextStyle(fontSize: 25, fontWeight: FontWeight.w900),
++          ),
++          const SizedBox(height: 18),
++          AnimatedSwitcher(
++            duration: const Duration(milliseconds: 220),
++            child: Text(
++              message,
++              key: ValueKey('$stepIndex-$message'),
++              textAlign: TextAlign.center,
++              style: const TextStyle(fontSize: 22, height: 1.35, fontWeight: FontWeight.w800),
++            ),
++          ),
++          const SizedBox(height: 24),
++          ClipRRect(
++            borderRadius: BorderRadius.circular(99),
++            child: LinearProgressIndicator(value: progress, minHeight: 10),
++          ),
++          const SizedBox(height: 8),
++          Text('Passo ${stepIndex + 1} de ${exercise.steps.length}'),
++        ],
++      ),
++    );
++  }
++}
+diff --git a/lib/features/g06_social/g06_screen.dart b/lib/features/g06_social/g06_screen.dart
+index 0c7db6c..9253c81 100644
+--- a/lib/features/g06_social/g06_screen.dart
++++ b/lib/features/g06_social/g06_screen.dart
+@@ -1,11 +1,12 @@
+ import 'dart:async';
+ import 'dart:math';
++
+ import 'package:flutter/material.dart';
++
+ import '../../core/adaptive/adaptive_engine.dart';
+ import '../../core/adaptive/social_adaptive_engine.dart';
+ import '../../core/adaptive/social_performance_snapshot.dart';
+ import '../../core/bootstrap/app_services.dart';
+-import '../../widgets/game_visual_strip.dart';
+ import 'social_scenario.dart';
+ 
+ class G06SocialScreen extends StatefulWidget {
+@@ -14,32 +15,37 @@ class G06SocialScreen extends StatefulWidget {
+     required this.profileId,
+     super.key,
+   });
++
+   final AppServices services;
+   final String profileId;
++
+   @override
+   State<G06SocialScreen> createState() => _G06SocialScreenState();
+ }
+ 
+ class _G06SocialScreenState extends State<G06SocialScreen> {
+-  static const _gameId = 'G06_mundo_amigos';
+-  static const _trialsPerSession = 6;
+-  final _engine = const SocialAdaptiveEngine();
++  static const String _gameId = 'G06_mundo_amigos';
++  static const int _trialsPerSession = 6;
++
++  final SocialAdaptiveEngine _engine = const SocialAdaptiveEngine();
+   final Random _random = Random.secure();
++
+   AdaptiveState _state = AdaptiveState.initial();
+   String? _sessionId;
+   Timer? _responseTimer;
+   List<SocialScenario> _scenarioOrder = const [];
+   PresentedSocialScenario? _presented;
+-  int _index = 0,
+-      _preferredPositionOffset = 0,
+-      _matches = 0,
+-      _supportive = 0,
+-      _omissions = 0;
++  int _index = 0;
++  int _matches = 0;
++  int _supportive = 0;
++  int _omissions = 0;
+   final List<int> _times = [];
+   DateTime? _started;
+-  bool _done = false, _resolved = false, _closing = false;
+-  String _feedback =
+-      'Escolha uma resposta que respeite as pessoas da história.';
++  bool _done = false;
++  bool _resolved = false;
++  bool _closing = false;
++  String _feedback = 'Escolha uma alternativa e veja o que ela pode causar.';
++
+   @override
+   void dispose() {
+     _responseTimer?.cancel();
+@@ -50,12 +56,13 @@ class _G06SocialScreenState extends State<G06SocialScreen> {
+   }
+ 
+   int get _responseWindowMs => const [
+-    18000,
+-    16500,
+-    15000,
+-    13500,
+-    12000,
+-  ][_state.level.clamp(1, 5).toInt() - 1];
++        20000,
++        18500,
++        17000,
++        15500,
++        14000,
++      ][_state.level.clamp(1, 5).toInt() - 1];
++
+   Future<void> _start() async {
+     if (_sessionId != null) return;
+     _sessionId = await widget.services.repository.startSession(
+@@ -64,13 +71,12 @@ class _G06SocialScreenState extends State<G06SocialScreen> {
+     );
+     _scenarioOrder = List<SocialScenario>.of(SocialScenario.examples)
+       ..shuffle(_random);
+-    _preferredPositionOffset = _random.nextInt(3);
+     await _record('session_started', {
+       'game_id': _gameId,
+-      'mode': 'social_learning_non_diagnostic',
++      'mode': 'social_learning_multiple_supportive_choices',
+       'scenario_pool': SocialScenario.examples.length,
+       'trials_planned': _trialsPerSession,
+-      'choice_order_randomized': true,
++      'multiple_supportive_choices': true,
+       'omission_timeout_enabled': true,
+     });
+     await widget.services.feedback.start();
+@@ -83,11 +89,7 @@ class _G06SocialScreenState extends State<G06SocialScreen> {
+     _responseTimer?.cancel();
+     final scenario = _scenarioOrder[_index];
+     final count = _state.level <= 2 ? 2 : 3;
+-    _presented = scenario.present(
+-      random: _random,
+-      choiceCount: count,
+-      preferredPosition: (_index + _preferredPositionOffset) % count,
+-    );
++    _presented = scenario.present(random: _random, choiceCount: count);
+     _resolved = false;
+     _started = DateTime.now();
+     _responseTimer = Timer(
+@@ -96,53 +98,54 @@ class _G06SocialScreenState extends State<G06SocialScreen> {
+     );
+   }
+ 
+-  Future<void> _choose(int choice) async {
+-    final p = _presented;
+-    if (p == null || _resolved || _done) return;
++  Future<void> _choose(int choiceIndex) async {
++    final presented = _presented;
++    if (presented == null || _resolved || _done) return;
+     _resolved = true;
+     _responseTimer?.cancel();
++
+     final elapsed = DateTime.now()
+         .difference(_started ?? DateTime.now())
+         .inMilliseconds;
+-    final matched = choice == p.preferredIndex;
+-    if (matched) {
+-      _matches++;
+-      _supportive++;
++    final choice = presented.choices
