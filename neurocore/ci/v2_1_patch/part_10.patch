@@ -1,0 +1,144 @@
+r,
++                    style: TextStyle(fontSize: 30, fontWeight: FontWeight.w900),
++                  ),
++                  const SizedBox(height: 10),
++                  const Text(
++                    'Você explorou diferentes maneiras de respeitar limites, conversar e resolver situações.',
++                    textAlign: TextAlign.center,
++                    style: TextStyle(fontSize: 17, height: 1.4),
++                  ),
++                  const SizedBox(height: 24),
++                  FilledButton.icon(
++                    onPressed: () => Navigator.of(context).pop(),
++                    icon: const Icon(Icons.home_rounded),
++                    label: const Text('Voltar às missões'),
++                  ),
++                ],
+               ),
+-            ],
++            ),
+           ),
+         ),
+       );
+-    if (_sessionId == null)
++    }
++
++    if (_sessionId == null) {
+       return Scaffold(
+-        appBar: AppBar(title: const Text('G06 • Mundo dos Amigos')),
+-        body: Center(
+-          child: Column(
+-            mainAxisSize: MainAxisSize.min,
++        appBar: AppBar(),
++        body: SafeArea(
++          child: ListView(
++            padding: const EdgeInsets.all(26),
+             children: [
+-              const GameVisualStrip(kind: GameVisualKind.social, height: 130),
+               const SizedBox(height: 20),
++              const Icon(Icons.diversity_1_rounded, size: 92, color: Color(0xFFD46F35)),
++              const SizedBox(height: 18),
++              const Text(
++                'Mundo dos Amigos',
++                textAlign: TextAlign.center,
++                style: TextStyle(fontSize: 31, fontWeight: FontWeight.w900),
++              ),
++              const SizedBox(height: 12),
++              const Text(
++                'Leia histórias curtas e escolha uma alternativa. Em várias situações pode existir mais de uma resposta respeitosa.',
++                textAlign: TextAlign.center,
++                style: TextStyle(fontSize: 17, height: 1.45),
++              ),
++              const SizedBox(height: 10),
++              Text(
++                'O jogo explica consequências. Ele não exige que a criança esconda seu jeito de ser nem mede empatia.',
++                textAlign: TextAlign.center,
++                style: TextStyle(
++                  fontSize: 13,
++                  height: 1.4,
++                  color: Theme.of(context).colorScheme.onSurfaceVariant,
++                ),
++              ),
++              const SizedBox(height: 26),
+               FilledButton.icon(
+                 onPressed: _start,
+                 icon: const Icon(Icons.play_arrow_rounded),
+-                label: const Text('Começar'),
++                label: const Text('Começar histórias'),
+               ),
+             ],
+           ),
+         ),
+       );
+-    final p = _presented;
++    }
++
++    final presented = _presented;
+     return Scaffold(
+-      appBar: AppBar(title: const Text('G06 • Mundo dos Amigos')),
++      appBar: AppBar(title: const Text('Mundo dos Amigos')),
+       body: SafeArea(
+         child: Padding(
+-          padding: const EdgeInsets.all(24),
++          padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+           child: Column(
+             crossAxisAlignment: CrossAxisAlignment.stretch,
+             children: [
+               LinearProgressIndicator(value: (_index + 1) / _trialsPerSession),
+-              const SizedBox(height: 14),
++              const SizedBox(height: 10),
+               Text(
+-                'História ${_index + 1} de $_trialsPerSession • nível ${_state.level}',
+-                style: const TextStyle(fontWeight: FontWeight.w800),
++                'História ${_index + 1} de $_trialsPerSession',
++                style: const TextStyle(fontWeight: FontWeight.w900),
+               ),
+-              const GameVisualStrip(kind: GameVisualKind.social, height: 90),
+-              Container(
+-                padding: const EdgeInsets.all(20),
+-                decoration: BoxDecoration(
+-                  color: const Color(0xFFFFF2E8),
+-                  borderRadius: BorderRadius.circular(24),
+-                ),
+-                child: Column(
++              const SizedBox(height: 12),
++              Expanded(
++                child: ListView(
+                   children: [
+-                    Text(
+-                      p?.story ?? 'Preparando história…',
+-                      textAlign: TextAlign.center,
+-                      style: const TextStyle(
+-                        fontSize: 21,
+-                        fontWeight: FontWeight.w800,
++                    Container(
++                      padding: const EdgeInsets.all(20),
++                      decoration: BoxDecoration(
++                        color: const Color(0xFFFFF0E6),
++                        borderRadius: BorderRadius.circular(26),
++                      ),
++                      child: Column(
++                        children: [
++                          Icon(
++                            _sceneIcon(presented?.scene),
++                            size: 66,
++                            color: const Color(0xFFD46F35),
++                          ),
++                          const SizedBox(height: 12),
++                          Text(
++                            presented?.story ?? 'Preparando história…',
++                            textAlign: TextAlign.center,
++                            style: const TextStyle(
++                              fontSize: 21,
++                              height: 1.3,
++                              fontWeight: FontWeight.w900,
++                            ),
++                          ),
++                        ],
+                       ),
+                     ),
++                    const SizedBox(height: 14),
++                    if (presented != null)
++                      ...presented.choices.asMap().entries.map(
++                            (entry) => Padding(
++                   
