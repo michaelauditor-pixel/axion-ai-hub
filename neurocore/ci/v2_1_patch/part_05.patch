@@ -1,0 +1,173 @@
+r i = 0; i < _strategies.length; i += 1)
+-        _strategies[(start + i) % _strategies.length],
++  List<_RegulationExercise> _visibleExercises(RegulationDifficultyConfig config) {
++    final start = (_round - 1).clamp(0, 1000) % _exercises.length;
++    final rotated = <_RegulationExercise>[
++      for (var i = 0; i < _exercises.length; i += 1)
++        _exercises[(start + i) % _exercises.length],
+     ];
+     return rotated.take(config.choiceCount).toList();
+   }
+@@ -72,7 +143,8 @@ class _G05RegulationScreenState extends State<G05RegulationScreen> {
+     );
+     await _record('session_started', {
+       'game_id': _gameId,
+-      'mode': 'neuroeducational_non_diagnostic',
++      'mode': 'guided_self_regulation_practice_non_diagnostic',
++      'rounds_planned': _roundsPerSession,
+       'omission_timeout_enabled': true,
+     });
+     await widget.services.feedback.start();
+@@ -80,6 +152,7 @@ class _G05RegulationScreenState extends State<G05RegulationScreen> {
+     setState(() {
+       _round = 1;
+       _started = DateTime.now();
++      _feedback = 'Escolha uma pausa curta para praticar.';
+     });
+     _armRoundTimer();
+   }
+@@ -93,30 +166,52 @@ class _G05RegulationScreenState extends State<G05RegulationScreen> {
+     );
+   }
+ 
+-  Future<void> _choose(String strategy) async {
++  Future<void> _choose(_RegulationExercise exercise) async {
+     if (_busy || _done || _sessionId == null) return;
+     _busy = true;
+     _roundTimer?.cancel();
+-    final elapsed = DateTime.now()
++
++    final selectionTime = DateTime.now()
+         .difference(_started ?? DateTime.now())
+         .inMilliseconds;
+-    final config = RegulationDifficultyConfig.forLevel(_state.level);
+-    if (elapsed < 500) _premature++;
+-    _completed++;
+-    _times.add(elapsed);
+-    await _record('regulation_strategy_completed', {
++    if (selectionTime < 500) _premature += 1;
++    _selectionTimes.add(selectionTime);
++
++    await _record('regulation_exercise_selected', {
+       'round': _round,
+-      'strategy': strategy,
+-      'completion_time_ms': elapsed,
++      'exercise_id': exercise.id,
++      'selection_time_ms': selectionTime,
+       'difficulty': _state.level,
+     });
++
++    if (!mounted) return;
++    setState(() {
++      _selectedExercise = exercise;
++      _guideStep = 0;
++      _feedback = exercise.steps.first.text;
++    });
++
++    for (var i = 0; i < exercise.steps.length; i += 1) {
++      final step = exercise.steps[i];
++      if (!mounted || _done) return;
++      setState(() {
++        _guideStep = i;
++        _feedback = step.text;
++      });
++      await Future<void>.delayed(Duration(seconds: step.seconds));
++    }
++
++    _completed += 1;
++    await _record('regulation_exercise_completed', {
++      'round': _round,
++      'exercise_id': exercise.id,
++      'steps_completed': exercise.steps.length,
++    });
+     await widget.services.feedback.correct();
++
+     if (!mounted) return;
+-    setState(
+-      () => _feedback =
+-          'Boa escolha. Agora siga o ritmo por ${config.pacingSeconds} segundos.',
+-    );
+-    await Future<void>.delayed(Duration(seconds: config.pacingSeconds));
++    setState(() => _feedback = 'Pronto. Você concluiu esta pausa.');
++    await Future<void>.delayed(const Duration(milliseconds: 700));
+     _busy = false;
+     await _advance();
+   }
+@@ -131,28 +226,26 @@ class _G05RegulationScreenState extends State<G05RegulationScreen> {
+     });
+     await widget.services.feedback.gentleMiss();
+     if (!mounted) return;
+-    setState(
+-      () => _feedback =
+-          'Sem problema. Esta parada passou e vamos seguir para a próxima.',
+-    );
+-    await Future<void>.delayed(const Duration(milliseconds: 750));
++    setState(() => _feedback = 'Tudo bem. Vamos para a próxima parada.');
++    await Future<void>.delayed(const Duration(milliseconds: 700));
+     _busy = false;
+     await _advance();
+   }
+ 
+   Future<void> _advance() async {
+     _roundTimer?.cancel();
+-    if (_round >= 6) {
++    if (_round >= _roundsPerSession) {
+       await _finish();
+       return;
+     }
++
+     if (_round % 2 == 0) {
+       final snapshot = RegulationPerformanceSnapshot(
+         prompts: _round,
+         completedStrategies: _completed,
+         prematureActions: _premature,
+         omissions: _omissions,
+-        completionTimesMs: _times,
++        completionTimesMs: _selectionTimes,
+       );
+       final decision = _engine.evaluate(state: _state, performance: snapshot);
+       _state = decision.nextState;
+@@ -162,11 +255,14 @@ class _G05RegulationScreenState extends State<G05RegulationScreen> {
+         'reason': decision.reasonCode,
+       });
+     }
++
+     if (!mounted) return;
+     setState(() {
+-      _round++;
++      _round += 1;
+       _started = DateTime.now();
+-      _feedback = 'Escolha uma estratégia e experimente.';
++      _selectedExercise = null;
++      _guideStep = 0;
++      _feedback = 'Escolha uma pausa curta para praticar.';
+     });
+     _armRoundTimer();
+   }
+@@ -174,18 +270,18 @@ class _G05RegulationScreenState extends State<G05RegulationScreen> {
+   Future<void> _finish() async {
+     _roundTimer?.cancel();
+     final snapshot = RegulationPerformanceSnapshot(
+-      prompts: 6,
++      prompts: _roundsPerSession,
+       completedStrategies: _completed,
+       prematureActions: _premature,
+       omissions: _omissions,
+-      completionTimesMs: _times,
++      completionTimesMs: _selectionTimes,
+     );
+     final summary = <String, Object?>{
+       'game_id': _gameId,
+       'blocks_completed': 3,
+       'final_difficulty': _state.level,
+       'performance': snapshot.toJson(),
+-      'note': 'practice_metric_not_emotion_diagnosis',
++      'note': 'guided_practice_metric_not_emotion_diagnosis',
+     };
+     final features = widget.services.neuroProfile.buildCompletedG05(
+       profileId: widget.profileId,
+@@ -199,8 +295,7 @@ class _G05RegulationScreenState extends State<G05RegulationScreen> {
+     );
+     _done = true;
+     await widget.services.feedback.complete();
+-    if (!
