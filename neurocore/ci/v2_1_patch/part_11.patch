@@ -1,0 +1,168 @@
+           padding: const EdgeInsets.only(bottom: 10),
++                              child: FilledButton.tonal(
++                                onPressed: _resolved ? null : () => _choose(entry.key),
++                                child: Padding(
++                                  padding: const EdgeInsets.symmetric(vertical: 14),
++                                  child: Text(
++                                    entry.value.text,
++                                    textAlign: TextAlign.center,
++                                    style: const TextStyle(fontSize: 15.5),
++                                  ),
++                                ),
++                              ),
++                            ),
++                          ),
+                     const SizedBox(height: 10),
+-                    Text(_feedback, textAlign: TextAlign.center),
+-                  ],
+-                ),
+-              ),
+-              const SizedBox(height: 16),
+-              if (p != null)
+-                ...p.choices.asMap().entries.map(
+-                  (e) => Padding(
+-                    padding: const EdgeInsets.only(bottom: 10),
+-                    child: FilledButton.tonal(
+-                      onPressed: _resolved ? null : () => _choose(e.key),
+-                      child: Padding(
++                    AnimatedSwitcher(
++                      duration: const Duration(milliseconds: 220),
++                      child: Container(
++                        key: ValueKey(_feedback),
+                         padding: const EdgeInsets.all(14),
+-                        child: Text(e.value),
++                        decoration: BoxDecoration(
++                          color: Theme.of(context).colorScheme.surfaceContainerHighest,
++                          borderRadius: BorderRadius.circular(18),
++                        ),
++                        child: Text(
++                          _feedback,
++                          textAlign: TextAlign.center,
++                          style: const TextStyle(fontWeight: FontWeight.w700, height: 1.35),
++                        ),
+                       ),
+                     ),
+-                  ),
++                  ],
+                 ),
+-              const Spacer(),
+-              const Text(
+-                'O objetivo é praticar leitura de contexto, respeito e alternativas sociais; não existe meta de mascaramento ou normalização comportamental.',
+-                textAlign: TextAlign.center,
+-                style: TextStyle(fontSize: 12),
+               ),
+             ],
+           ),
+@@ -340,3 +412,26 @@ class _G06SocialScreenState extends State<G06SocialScreen> {
+     );
+   }
+ }
++
++IconData _sceneIcon(String? scene) {
++  switch (scene) {
++    case 'help':
++      return Icons.volunteer_activism_rounded;
++    case 'space':
++      return Icons.self_improvement_rounded;
++    case 'sharing':
++      return Icons.toys_rounded;
++    case 'explain':
++      return Icons.lightbulb_rounded;
++    case 'turn':
++      return Icons.record_voice_over_rounded;
++    case 'different':
++      return Icons.diversity_3_rounded;
++    case 'support':
++      return Icons.favorite_rounded;
++    case 'clarify':
++      return Icons.question_answer_rounded;
++    default:
++      return Icons.people_alt_rounded;
++  }
++}
+diff --git a/lib/features/g06_social/g06_screen.dart.orig b/lib/features/g06_social/g06_screen.dart.orig
+deleted file mode 100644
+index bdbebbc..0000000
+--- a/lib/features/g06_social/g06_screen.dart.orig
++++ /dev/null
+@@ -1,252 +0,0 @@
+-import 'package:flutter/material.dart';
+-
+-import '../../core/adaptive/adaptive_engine.dart';
+-import '../../core/adaptive/social_adaptive_engine.dart';
+-import '../../core/adaptive/social_performance_snapshot.dart';
+-import '../../core/bootstrap/app_services.dart';
+-import 'social_scenario.dart';
+-
+-class G06SocialScreen extends StatefulWidget {
+-  const G06SocialScreen({
+-    required this.services,
+-    required this.profileId,
+-    super.key,
+-  });
+-  final AppServices services;
+-  final String profileId;
+-  @override
+-  State<G06SocialScreen> createState() => _G06SocialScreenState();
+-}
+-
+-class _G06SocialScreenState extends State<G06SocialScreen> {
+-  static const _gameId = 'G06_mundo_amigos';
+-  final _engine = const SocialAdaptiveEngine();
+-  AdaptiveState _state = AdaptiveState.initial();
+-  String? _sessionId;
+-  int _index = 0;
+-  int _matches = 0;
+-  int _supportive = 0;
+-  final int _omissions = 0;
+-  final List<int> _times = [];
+-  DateTime? _started;
+-  bool _done = false;
+-  String _feedback =
+-      'Escolha uma resposta que respeite as pessoas da história.';
+-
+-  Future<void> _start() async {
+-    _sessionId = await widget.services.repository.startSession(
+-      profileId: widget.profileId,
+-      gameId: _gameId,
+-    );
+-    _started = DateTime.now();
+-    await _record('session_started', {
+-      'game_id': _gameId,
+-      'mode': 'social_learning_non_diagnostic',
+-    });
+-    if (mounted) setState(() {});
+-  }
+-
+-  Future<void> _choose(int choice) async {
+-    final scenario =
+-        SocialScenario.examples[_index % SocialScenario.examples.length];
+-    final elapsed = DateTime.now()
+-        .difference(_started ?? DateTime.now())
+-        .inMilliseconds;
+-    final correct = choice == scenario.preferredIndex;
+-    if (correct) {
+-      _matches++;
+-      _supportive++;
+-    }
+-    _times.add(elapsed);
+-    await _record('social_choice', {
+-      'trial': _index + 1,
+-      'choice_index': choice,
+-      'context_match': correct,
+-      'reaction_time_ms': elapsed,
+-    });
+-    if (!mounted) return;
+-    setState(
+-      () => _feedback = correct
+-          ? 'Boa leitura da situação.'
+-          : 'Outra resposta pode respeitar melhor o que a pessoa precisa.',
+-    );
+-    await Future<void>.delayed(const Duration(milliseconds: 900));
+-    await _next();
+-  }
+-
+-  Future<void> _next() async {
+-    final completed = _index + 1;
+-    if (completed >= 6) {
+-      await _finish()
