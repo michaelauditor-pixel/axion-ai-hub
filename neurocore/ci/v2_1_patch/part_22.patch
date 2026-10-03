@@ -1,0 +1,112 @@
+diff --git a/lib/core/product/product_info.dart b/lib/core/product/product_info.dart
+new file mode 100644
+index 0000000..14ba6ba
+--- /dev/null
++++ b/lib/core/product/product_info.dart
+@@ -0,0 +1,24 @@
++class ProductInfo {
++  const ProductInfo._();
++
++  static const String productName = 'NeuroCore';
++  static const String version = '2.1.0+21';
++  static const String recommendedAge = '6 a 11 anos';
++  static const String primaryLanguage = 'Português (Brasil)';
++  static const String developerDisplay = 'Equipe NeuroCore • Brasil';
++
++  static const String positioning =
++      'Plataforma neuroeducacional adaptativa para prática de atenção, memória de trabalho, controle inibitório, flexibilidade cognitiva, autorregulação e habilidades socioemocionais.';
++
++  static const String clinicalBoundary =
++      'O NeuroCore não realiza diagnóstico, não mede transtornos e não substitui avaliação, psicoterapia, acompanhamento médico, intervenção neuropsicológica ou tratamento indicado por profissional habilitado.';
++
++  static const String audience =
++      'Pode ser usado por crianças com ou sem diagnóstico. Foi desenhado especialmente para habilidades que podem ser desafiadoras em crianças com TDAH e outros perfis neurodivergentes, sem afirmar tratamento de TDAH, TEA, TOD ou qualquer outro transtorno.';
++
++  static const String privacy =
++      'O aplicativo prioriza funcionamento local, minimização de dados, ausência de anúncios e ausência de analytics publicitário. Perfis podem usar apelidos em vez de nome completo.';
++
++  static const String international =
++      'A versão atual é em português do Brasil. A arquitetura do produto deve evoluir para localização completa em inglês, espanhol e português europeu antes da distribuição internacional.';
++}
+diff --git a/lib/features/parent/parent_guide_screen.dart b/lib/features/parent/parent_guide_screen.dart
+new file mode 100644
+index 0000000..c31bd01
+--- /dev/null
++++ b/lib/features/parent/parent_guide_screen.dart
+@@ -0,0 +1,321 @@
++import 'package:flutter/material.dart';
++
++import '../../core/product/product_info.dart';
++
++class ParentGuideScreen extends StatelessWidget {
++  const ParentGuideScreen({super.key});
++
++  @override
++  Widget build(BuildContext context) {
++    return Scaffold(
++      appBar: AppBar(title: const Text('Guia para responsáveis')),
++      body: ListView(
++        padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
++        children: const [
++          _IntroCard(),
++          SizedBox(height: 14),
++          _GameGuideCard(
++            number: '01',
++            title: 'Missão Foco',
++            icon: Icons.center_focus_strong_rounded,
++            whatItPractices:
++                'Atenção seletiva, busca visual e consistência de resposta.',
++            howItWorks:
++                'A criança recebe um símbolo-alvo e procura esse alvo entre distrações. Em algumas rodadas o alvo não aparece, então esperar também faz parte da tarefa.',
++            parentObservation:
++                'Observe se a criança passa a localizar o alvo com mais estabilidade, com menos toques impulsivos e menos omissões dentro do próprio jogo.',
++            boundary:
++                'Melhor desempenho aqui não comprova melhora de atenção em casa ou na escola. Essa transferência precisa ser avaliada fora do aplicativo.',
++          ),
++          _GameGuideCard(
++            number: '02',
++            title: 'Pare, Pense, Vá!',
++            icon: Icons.traffic_rounded,
++            whatItPractices:
++                'Controle inibitório, espera e velocidade de resposta.',
++            howItWorks:
++                'A criança toca quando recebe o sinal de VÁ e precisa inibir a resposta quando aparece PARE. Os blocos são balanceados para sempre conter os dois tipos de sinal.',
++            parentObservation:
++                'Acompanhe redução de toques em PARE, omissões em VÁ e maior estabilidade do tempo de resposta.',
++            boundary:
++                'O jogo não demonstra, por si só, redução clínica da impulsividade nem substitui avaliação comportamental.',
++          ),
++          _GameGuideCard(
++            number: '03',
++            title: 'Memória Mágica',
++            icon: Icons.auto_awesome_rounded,
++            whatItPractices:
++                'Memória de trabalho visuoespacial e manutenção de sequência.',
++            howItWorks:
++                'Símbolos aparecem em sequência. Depois, a criança deve reproduzir a ordem apresentada. O comprimento e o ritmo variam conforme o desempenho.',
++            parentObservation:
++                'Observe o maior comprimento de sequência que a criança consegue reproduzir com estabilidade e como lida com aumento gradual da dificuldade.',
++            boundary:
++                'O resultado representa desempenho na tarefa e não equivale a teste neuropsicológico de memória.',
++          ),
++          _GameGuideCard(
++            number: '04',
++            title: 'Troca-Troca',
++            icon: Icons.swap_horiz_rounded,
++            whatItPractices:
++                'Flexibilidade cognitiva e mudança de regra.',
++            howItWorks:
++                'A criança classifica um símbolo pela cor ou pela forma e precisa perceber quando a regra muda.',
++            parentObservation:
++                'Observe acertos após mudança de regra, erros perseverativos e tempo necessário para se adaptar à nova instrução.',
++            boundary:
++                'O desempenho não mede rigidez comportamental em situações reais; ele descreve apenas adaptação dentro da tarefa.',
++          ),
++          _GameGuideCard(
++            number: '05',
++            title: 'Montanha da Calma',
++            icon: Icons.landscape_rounded,
++            whatItPractices:
++                'Repertório de pausa, respiração, relaxamento corporal e escolha de estratégia.',
++            howItWorks:
++                'A criança 
