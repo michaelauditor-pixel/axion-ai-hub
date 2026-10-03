@@ -1,0 +1,157 @@
+diff --git a/android/app/src/main/AndroidManifest.xml b/android/app/src/main/AndroidManifest.xml
+index ab1f841..3e1449e 100644
+--- a/android/app/src/main/AndroidManifest.xml
++++ b/android/app/src/main/AndroidManifest.xml
+@@ -1,6 +1,6 @@
+ <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+     <application android:allowBackup="false" android:usesCleartextTraffic="false"
+-        android:label="neurocore_app"
++        android:label="NeuroCore"
+         android:name="${applicationName}"
+         android:icon="@mipmap/ic_launcher">
+         <activity
+diff --git a/lib/core/adaptive/social_performance_snapshot.dart b/lib/core/adaptive/social_performance_snapshot.dart
+index 1cc54df..88c9a6b 100644
+--- a/lib/core/adaptive/social_performance_snapshot.dart
++++ b/lib/core/adaptive/social_performance_snapshot.dart
+@@ -19,6 +19,7 @@ class SocialPerformanceSnapshot {
+   double get mismatchRate => trials <= 0
+       ? 0
+       : (trials - contextMatches - omissions).clamp(0, trials) / trials;
++  double get nonSupportiveChoiceRate => mismatchRate;
+   double get omissionRate => trials <= 0 ? 0 : omissions / trials;
+   double get reactionTimeCv {
+     if (reactionTimesMs.length < 2) return 0;
+@@ -51,6 +52,7 @@ class SocialPerformanceSnapshot {
+     'context_match_rate': contextMatchRate,
+     'supportive_choice_rate': supportiveChoiceRate,
+     'mismatch_rate': mismatchRate,
++    'non_supportive_choice_rate': nonSupportiveChoiceRate,
+     'omission_rate': omissionRate,
+     'reaction_time_cv': reactionTimeCv,
+     'median_reaction_time_ms': medianReactionTimeMs,
+diff --git a/lib/core/feedback/game_feedback_service.dart b/lib/core/feedback/game_feedback_service.dart
+index 59b161b..e1d47c0 100644
+--- a/lib/core/feedback/game_feedback_service.dart
++++ b/lib/core/feedback/game_feedback_service.dart
+@@ -1,52 +1,52 @@
+-import 'dart:async';
+-
++import 'package:audioplayers/audioplayers.dart';
+ import 'package:flutter/services.dart';
+ 
+ import '../accessibility/accessibility_service.dart';
+ 
+ /// Feedback audiovisual leve e não punitivo para a área infantil.
+-/// Usa apenas recursos do sistema, sem SDKs externos ou rastreamento.
++/// Os sons são arquivos locais do próprio aplicativo, sem rede ou rastreamento.
+ class GameFeedbackService {
+-  const GameFeedbackService({required AccessibilityService accessibility})
+-    : _accessibility = accessibility;
++  GameFeedbackService({required AccessibilityService accessibility})
++      : _accessibility = accessibility;
+ 
+   final AccessibilityService _accessibility;
++  final AudioPlayer _player = AudioPlayer();
+ 
+   Future<void> start() async {
+-    await _soundPulse(count: 1);
++    await _play('audio/start.wav', volume: .18);
+     if (_accessibility.preferences.hapticsEnabled) {
+       await HapticFeedback.selectionClick();
+     }
+   }
+ 
+   Future<void> correct() async {
+-    await _soundPulse(count: 2, spacingMs: 70);
++    await _play('audio/correct.wav', volume: .22);
+     if (_accessibility.preferences.hapticsEnabled) {
+       await HapticFeedback.lightImpact();
+     }
+   }
+ 
+   Future<void> gentleMiss() async {
+-    await _soundPulse(count: 1);
++    await _play('audio/gentle_miss.wav', volume: .14);
+     if (_accessibility.preferences.hapticsEnabled) {
+       await HapticFeedback.selectionClick();
+     }
+   }
+ 
+   Future<void> complete() async {
+-    await _soundPulse(count: 3, spacingMs: 85);
++    await _play('audio/complete.wav', volume: .20);
+     if (_accessibility.preferences.hapticsEnabled) {
+       await HapticFeedback.mediumImpact();
+     }
+   }
+ 
+-  Future<void> _soundPulse({required int count, int spacingMs = 60}) async {
++  Future<void> _play(String asset, {required double volume}) async {
+     if (!_accessibility.preferences.soundEnabled) return;
+-    for (var i = 0; i < count; i += 1) {
+-      await SystemSound.play(SystemSoundType.click);
+-      if (i + 1 < count) {
+-        await Future<void>.delayed(Duration(milliseconds: spacingMs));
+-      }
++    try {
++      await _player.stop();
++      await _player.play(AssetSource(asset), volume: volume);
++    } catch (_) {
++      // Som nunca deve bloquear ou interromper a experiência do jogo.
+     }
+   }
+ }
+diff --git a/lib/core/profile/neuro_profile_aggregator.dart b/lib/core/profile/neuro_profile_aggregator.dart
+index b20862a..a8c87ae 100644
+--- a/lib/core/profile/neuro_profile_aggregator.dart
++++ b/lib/core/profile/neuro_profile_aggregator.dart
+@@ -4,139 +4,83 @@ import 'profile_models.dart';
+ class NeuroProfileAggregator {
+   const NeuroProfileAggregator();
+ 
++  static const int minimumSessionsPerDomain = 3;
++
+   NeuroProfileView aggregate({
+     required String profileId,
+     required List<SessionFeatureVectorV1> features,
+   }) {
+     if (features.isEmpty) {
+-      return NeuroProfileView(
+-        profileId: profileId,
+-        sessionCount: 0,
+-        sustainedAttentionIndicator: null,
+-        inhibitoryControlIndicator: null,
+-        workingMemoryIndicator: null,
+-        cognitiveFlexibilityIndicator: null,
+-        selfRegulationPracticeIndicator: null,
+-        socialEmotionalLearningIndicator: null,
+-        responseConsistencyIndicator: null,
+-        overallGameplayIndicator: null,
+-        averageDifficulty: null,
+-        trend: 'insufficient_data',
+-        updatedAt: null,
+-      );
++      return _empty(profileId, 0, null);
+     }
++
+     final ordered = [...features]
+       ..sort((a, b) => a.completedAt.compareTo(b.completedAt));
+-    double? attention,
+-        inhibition,
+-        memory,
+-        flexibility,
+-        regulation,
+-        social,
+-        consistency;
+-    var difficultySum = 0.0;
+-    for (final feature in ordered) {
+-      switch (feature.gameId) {
+-        case 'G01_missao_foco':
+-          attention = _ewma(attention, _accuracyScore(feature));
+-          break;
+-        case 'G02_pare_pense_va':
+-          inhibition = _ewma(inhibition, _accuracyScore(feature));
+-          break;
+-        case 'G03_memoria_magica':
+-          memory = _ewma(
