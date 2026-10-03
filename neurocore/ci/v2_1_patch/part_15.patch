@@ -1,0 +1,154 @@
+re<void> _openG01() => _openGame(
+-    (profileId) =>
+-        G01FocusScreen(services: widget.services, profileId: profileId),
+-  );
+-
++        (profileId) => G01FocusScreen(services: widget.services, profileId: profileId),
++      );
+   Future<void> _openG02() => _openGame(
+-    (profileId) =>
+-        G02InhibitionScreen(services: widget.services, profileId: profileId),
+-  );
+-
++        (profileId) => G02InhibitionScreen(services: widget.services, profileId: profileId),
++      );
+   Future<void> _openG03() => _openGame(
+-    (profileId) =>
+-        G03MemoryScreen(services: widget.services, profileId: profileId),
+-  );
+-
++        (profileId) => G03MemoryScreen(services: widget.services, profileId: profileId),
++      );
+   Future<void> _openG04() => _openGame(
+-    (profileId) =>
+-        G04FlexibilityScreen(services: widget.services, profileId: profileId),
+-  );
+-
++        (profileId) => G04FlexibilityScreen(services: widget.services, profileId: profileId),
++      );
+   Future<void> _openG05() => _openGame(
+-    (profileId) =>
+-        G05RegulationScreen(services: widget.services, profileId: profileId),
+-  );
+-
++        (profileId) => G05RegulationScreen(services: widget.services, profileId: profileId),
++      );
+   Future<void> _openG06() => _openGame(
+-    (profileId) =>
+-        G06SocialScreen(services: widget.services, profileId: profileId),
+-  );
++        (profileId) => G06SocialScreen(services: widget.services, profileId: profileId),
++      );
+ 
+   Future<void> _openGame(Widget Function(String profileId) builder) async {
+     final profileId = _activeProfileId;
+     if (profileId == null) return;
+-    await Navigator.of(
+-      context,
+-    ).push<void>(MaterialPageRoute<void>(builder: (_) => builder(profileId)));
++    await Navigator.of(context).push<void>(
++      MaterialPageRoute<void>(builder: (_) => builder(profileId)),
++    );
+     await _refresh();
+   }
+ 
+@@ -129,186 +110,82 @@ class _HomeScreenState extends State<HomeScreen> {
+ 
+   @override
+   Widget build(BuildContext context) {
+-    if (_loading)
++    if (_loading) {
+       return const Scaffold(body: Center(child: CircularProgressIndicator()));
++    }
+ 
+     return Scaffold(
+       body: SafeArea(
+-        child: ListView(
+-          padding: const EdgeInsets.all(24),
+-          children: [
+-            const SizedBox(height: 12),
+-            Row(
+-              children: [
+-                Container(
+-                  width: 54,
+-                  height: 54,
+-                  decoration: BoxDecoration(
+-                    color: Theme.of(context).colorScheme.primaryContainer,
+-                    borderRadius: BorderRadius.circular(18),
++        child: CustomScrollView(
++          slivers: [
++            SliverPadding(
++              padding: const EdgeInsets.fromLTRB(18, 14, 18, 0),
++              sliver: SliverList.list(
++                children: [
++                  _Header(
++                    profileName: _activeProfile?.displayLabel ?? 'Explorador',
++                    onAccessibility: _openAccessibility,
++                    onParentArea: _openParentArea,
+                   ),
+-                  child: const Icon(Icons.auto_awesome_rounded, size: 30),
+-                ),
+-                const SizedBox(width: 14),
+-                const Expanded(
+-                  child: Column(
+-                    crossAxisAlignment: CrossAxisAlignment.start,
+-                    children: [
+-                      Text(
+-                        'NeuroCore',
+-                        style: TextStyle(
+-                          fontSize: 26,
+-                          fontWeight: FontWeight.w900,
+-                        ),
+-                      ),
+-                      Text(
+-                        'V1.9 AUDITED • 6 jogos • VÁ/PARE balanceado • sons/háptica • mais variedade visual • privacidade • ML shadow/fail-closed',
+-                      ),
+-                    ],
++                  const SizedBox(height: 18),
++                  const Text(
++                    'Qual missão vamos jogar?',
++                    style: TextStyle(
++                      fontSize: 28,
++                      height: 1.05,
++                      fontWeight: FontWeight.w900,
++                    ),
+                   ),
+-                ),
+-                IconButton.filledTonal(
+-                  tooltip: 'Conforto e acessibilidade',
+-                  onPressed: _openAccessibility,
+-                  icon: const Icon(Icons.accessibility_new_rounded),
+-                ),
+-                const SizedBox(width: 8),
+-                IconButton.filledTonal(
+-                  tooltip: 'Área do responsável',
+-                  onPressed: _openParentArea,
+-                  icon: const Icon(Icons.supervisor_account_outlined),
+-                ),
+-              ],
+-            ),
+-            const SizedBox(height: 24),
+-            Container(
+-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+-              decoration: BoxDecoration(
+-                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+-                borderRadius: BorderRadius.circular(18),
+-              ),
+-              child: Row(
+-                children: [
+-                  const Icon(Icons.face_rounded),
+-                  const SizedBox(width: 10),
+-                  Expanded(
+-                    child: Text(
+-                      "Jogando como: ${_activeProfile?.displayLabel ?? 'Explorador'}",
+-                      style: const TextStyle(fontWeight: FontWeight.w700),
++                  const SizedBox(height: 6),
++                  Text(
++                    'Escolha uma aventura curta. Você pode parar quando quiser.',
++                    style: TextStyle(
++                      fontSize: 14,
++                      height: 1.35,
++                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                     ),
+                   ),
+-                  const Icon(Icons.lock_out
