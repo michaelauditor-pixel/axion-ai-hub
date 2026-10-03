@@ -1,0 +1,134 @@
+line_rounded, size: 18),
++                  const SizedBox(height: 16),
+                 ],
+               ),
+             ),
+-            const SizedBox(height: 24),
+-            const Text(
+-              'Escolha uma missão.',
+-              style: TextStyle(
+-                fontSize: 30,
+-                height: 1.05,
+-                fontWeight: FontWeight.w900,
++            SliverPadding(
++              padding: const EdgeInsets.symmetric(horizontal: 18),
++              sliver: SliverList.separated(
++                itemCount: _missions.length,
++                separatorBuilder: (_, __) => const SizedBox(height: 10),
++                itemBuilder: (context, index) {
++                  final mission = _missions[index];
++                  final callbacks = <VoidCallback>[
++                    _openG01,
++                    _openG02,
++                    _openG03,
++                    _openG04,
++                    _openG05,
++                    _openG06,
++                  ];
++                  return _MissionCard(mission: mission, onTap: callbacks[index]);
++                },
+               ),
+             ),
+-            const SizedBox(height: 12),
+-            Text(
+-              'Cada missão coleta métricas diferentes e ajusta a dificuldade ao desempenho observado.',
+-              style: TextStyle(
+-                fontSize: 15,
+-                height: 1.45,
+-                color: Theme.of(context).colorScheme.onSurfaceVariant,
+-              ),
+-            ),
+-            const SizedBox(height: 28),
+-            _GameCard(
+-              background: const Color(0xFFEAF0FF),
+-              iconBackground: const Color(0xFF4F67D8),
+-              icon: Icons.star_rounded,
+-              title: 'G01 • Missão Foco',
+-              description:
+-                  'Encontre a estrela azul entre os outros símbolos. Trabalha atenção seletiva e consistência de resposta no jogo.',
+-              buttonLabel: 'Iniciar Missão Foco',
+-              onTap: _openG01,
+-            ),
+-            const SizedBox(height: 16),
+-            _GameCard(
+-              background: const Color(0xFFE9F8EE),
+-              iconBackground: const Color(0xFF2F8B50),
+-              icon: Icons.pan_tool_alt_rounded,
+-              title: 'G02 • Pare, Pense, Vá!',
+-              description:
+-                  'Toque quando aparecer VÁ e espere quando aparecer PARE. O ritmo se adapta ao desempenho da sessão.',
+-              buttonLabel: 'Iniciar Pare, Pense, Vá!',
+-              onTap: _openG02,
+-            ),
+-            const SizedBox(height: 16),
+-            _GameCard(
+-              background: const Color(0xFFFFF4DD),
+-              iconBackground: const Color(0xFFD38A21),
+-              icon: Icons.auto_awesome_rounded,
+-              title: 'G03 • Memória Mágica',
+-              description:
+-                  'Observe uma sequência curta de símbolos e repita a mesma ordem. O comprimento e o ritmo se ajustam ao desempenho.',
+-              buttonLabel: 'Iniciar Memória Mágica',
+-              onTap: _openG03,
+-            ),
+-            const SizedBox(height: 16),
+-            _GameCard(
+-              background: const Color(0xFFF2EAFE),
+-              iconBackground: const Color(0xFF7B52B9),
+-              icon: Icons.swap_horiz_rounded,
+-              title: 'G04 • Troca-Troca',
+-              description:
+-                  'Classifique o símbolo pela cor ou pela forma e acompanhe as mudanças de regra durante a missão.',
+-              buttonLabel: 'Iniciar Troca-Troca',
+-              onTap: _openG04,
+-            ),
+-            const SizedBox(height: 16),
+-            _GameCard(
+-              background: const Color(0xFFE8F7F2),
+-              iconBackground: const Color(0xFF27856E),
+-              icon: Icons.landscape_rounded,
+-              title: 'G05 • Montanha da Calma',
+-              description:
+-                  'Pratique pausas e estratégias de autorregulação em uma subida guiada, sem interpretar emoções ou diagnósticos.',
+-              buttonLabel: 'Iniciar Montanha da Calma',
+-              onTap: _openG05,
+-            ),
+-            const SizedBox(height: 16),
+-            _GameCard(
+-              background: const Color(0xFFFFF0E6),
+-              iconBackground: const Color(0xFFD46F35),
+-              icon: Icons.diversity_1_rounded,
+-              title: 'G06 • Mundo dos Amigos',
+-              description:
+-                  'Explore histórias sociais, respeito, turnos e alternativas de resposta sem exigir mascaramento comportamental.',
+-              buttonLabel: 'Iniciar Mundo dos Amigos',
+-              onTap: _openG06,
+-            ),
+-            const SizedBox(height: 18),
+-            Container(
+-              padding: const EdgeInsets.all(18),
+-              decoration: BoxDecoration(
+-                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+-                borderRadius: BorderRadius.circular(20),
+-              ),
+-              child: Row(
++            SliverPadding(
++              padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
++              sliver: SliverList.list(
+                 children: [
+-                  const Icon(Icons.lock_outline_rounded),
+-                  const SizedBox(width: 12),
+-                  Expanded(
+-                    child: Text(
+-                      'Sessões concluídas por ${_activeProfile?.displayLabel ?? 'este perfil'}: ${_completedSessions ?? 0}',
+-                    ),
++                  OutlinedButton.icon(
++                    onPressed: _openParentArea,
++                    icon: const Icon(Icons.shield_outlined),
++                    label: const Text('Área dos responsáveis'),
++                  ),
++                  const SizedBox(height: 10),
++                  const Text(
++                    'Faixa recomendada: ${ProductInfo.recommendedAge}.',
++                    textAlign: TextAlign.center,
++                    style: TextStyle(fontSiz
