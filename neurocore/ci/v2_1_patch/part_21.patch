@@ -1,0 +1,127 @@
+, 0.08),
+       ],
+     );
+ 
++    expect(view.sustainedAttentionIndicator, isNull);
++    expect(view.inhibitoryControlIndicator, isNull);
++    expect(view.overallGameplayIndicator, isNull);
++  });
++
++  test('each domain appears after three comparable same-game sessions', () {
++    final features = <SessionFeatureVectorV1>[];
++    final games = <String>[
++      'G01_missao_foco',
++      'G02_pare_pense_va',
++      'G03_memoria_magica',
++      'G04_troca_troca',
++      'G05_montanha_calma',
++      'G06_mundo_amigos',
++    ];
++    var day = 1;
++    for (final game in games) {
++      for (var i = 0; i < 3; i++) {
++        features.add(feature(game, day++, 0.82 + i * 0.02, 0.12 - i * 0.01));
++      }
++    }
++
++    final view = const NeuroProfileAggregator().aggregate(
++      profileId: 'p1',
++      features: features,
++    );
++
+     expect(view.sustainedAttentionIndicator, isNotNull);
+     expect(view.inhibitoryControlIndicator, isNotNull);
+     expect(view.workingMemoryIndicator, isNotNull);
+     expect(view.cognitiveFlexibilityIndicator, isNotNull);
+     expect(view.selfRegulationPracticeIndicator, isNotNull);
+     expect(view.socialEmotionalLearningIndicator, isNotNull);
+-    expect(view.overallGameplayIndicator, isNotNull);
++    expect(view.overallGameplayIndicator, isNull);
++    expect(view.responseConsistencyIndicator, isNull);
+   });
+ }
+diff --git a/test/v19_audit_regression_test.dart b/test/v19_audit_regression_test.dart
+index 551c4b9..ef7387f 100644
+--- a/test/v19_audit_regression_test.dart
++++ b/test/v19_audit_regression_test.dart
+@@ -41,33 +41,57 @@ void main() {
+       }
+     }
+   });
+-  test(
+-    'G06 has at least six unique stories and preferred choice stays visible',
+-    () {
+-      expect(SocialScenario.examples.length, greaterThanOrEqualTo(6));
++  test('G01 varies target identity and never duplicates an absent target', () {
++    final generator = FocusTrialGenerator(random: Random(19));
++    final identities = <String>{};
++    for (var i = 0; i < 120; i++) {
++      final trial = generator.generate(
++        DifficultyConfig.forLevel(4),
++        targetPresentOverride: false,
++      );
++      identities.add('${trial.target.shape.name}-${trial.target.tone.name}');
++      expect(
++        trial.items.any(
++          (item) =>
++              item.shape == trial.target.shape &&
++              item.tone == trial.target.tone,
++        ),
++        isFalse,
++      );
++    }
++    expect(identities.length, greaterThanOrEqualTo(8));
++  });
++
++  test('G06 has unique stories and more than one supportive alternative', () {
++    expect(SocialScenario.examples.length, greaterThanOrEqualTo(6));
++    expect(
++      SocialScenario.examples.map((e) => e.story).toSet().length,
++      SocialScenario.examples.length,
++    );
++    final random = Random(11);
++    for (final scenario in SocialScenario.examples) {
+       expect(
+-        SocialScenario.examples.map((e) => e.story).toSet().length,
+-        SocialScenario.examples.length,
++        scenario.choices.where((choice) => choice.supportive).length,
++        greaterThanOrEqualTo(2),
+       );
+-      final random = Random(11);
+-      for (final scenario in SocialScenario.examples) {
+-        for (var count = 2; count <= 3; count++) {
+-          for (var position = 0; position < count; position++) {
+-            final p = scenario.present(
+-              random: random,
+-              choiceCount: count,
+-              preferredPosition: position,
+-            );
+-            expect(p.preferredIndex, position);
+-            expect(
+-              p.choices[position],
+-              scenario.choices[scenario.preferredIndex],
+-            );
+-          }
++      expect(
++        scenario.choices.where((choice) => !choice.supportive).length,
++        greaterThanOrEqualTo(1),
++      );
++      for (var count = 2; count <= 3; count++) {
++        final presented = scenario.present(random: random, choiceCount: count);
++        expect(presented.choices.length, count);
++        expect(presented.supportiveIndices, isNotEmpty);
++        expect(
++          presented.choices.where((choice) => !choice.supportive),
++          isNotEmpty,
++        );
++        if (count == 3) {
++          expect(presented.supportiveIndices.length, greaterThanOrEqualTo(2));
+         }
+       }
+-    },
+-  );
++    }
++  });
+   test('G05 has real positive response windows for omission measurement', () {
+     for (var level = 1; level <= 5; level++)
+       expect(
