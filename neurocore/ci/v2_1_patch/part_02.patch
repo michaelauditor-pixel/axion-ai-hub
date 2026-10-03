@@ -1,0 +1,172 @@
+ class NeuroProfileView {
+   final double? averageDifficulty;
+   final String trend;
+   final DateTime? updatedAt;
+-  bool get hasData => sessionCount > 0;
++  bool get hasData =>
++      sustainedAttentionIndicator != null ||
++      inhibitoryControlIndicator != null ||
++      workingMemoryIndicator != null ||
++      cognitiveFlexibilityIndicator != null ||
++      selfRegulationPracticeIndicator != null ||
++      socialEmotionalLearningIndicator != null;
+ }
+diff --git a/lib/features/g01_focus/g01_screen.dart b/lib/features/g01_focus/g01_screen.dart
+index 4b3e703..8ae4f2f 100644
+--- a/lib/features/g01_focus/g01_screen.dart
++++ b/lib/features/g01_focus/g01_screen.dart
+@@ -177,7 +177,7 @@ class _G01FocusScreenState extends State<G01FocusScreen> {
+       outcome = 'commission';
+       _blockPerformance.commissions += 1;
+       await widget.services.feedback.gentleMiss();
+-      _feedback = 'Quase! Procure a estrela azul.';
++      _feedback = 'Quase! Confira forma e cor do alvo.';
+     }
+ 
+     await _record('stimulus_response', {
+@@ -437,19 +437,21 @@ class _G01FocusScreenState extends State<G01FocusScreen> {
+                 ),
+                 const SizedBox(height: 20),
+                 const Text(
+-                  'Toque somente na estrela azul',
++                  'Encontre o símbolo-alvo',
+                   textAlign: TextAlign.center,
+-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900),
++                  style: TextStyle(fontSize: 23, fontWeight: FontWeight.w900),
+                 ),
+-                const SizedBox(height: 7),
++                const SizedBox(height: 6),
+                 Text(
+-                  'Nível ${_adaptiveState.level}',
++                  'Se ele não aparecer, espere.',
+                   style: TextStyle(
+                     color: Theme.of(context).colorScheme.onSurfaceVariant,
+                     fontWeight: FontWeight.w600,
+                   ),
+                 ),
+-                const SizedBox(height: 22),
++                const SizedBox(height: 10),
++                if (trial != null) _TargetCue(target: trial.target),
++                const SizedBox(height: 14),
+                 Expanded(
+                   child: trial == null
+                       ? const Center(child: CircularProgressIndicator())
+@@ -489,6 +491,61 @@ class _G01FocusScreenState extends State<G01FocusScreen> {
+   }
+ }
+ 
++class _TargetCue extends StatelessWidget {
++  const _TargetCue({required this.target});
++
++  final FocusTarget target;
++
++  @override
++  Widget build(BuildContext context) {
++    return Container(
++      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
++      decoration: BoxDecoration(
++        color: Theme.of(context).colorScheme.surfaceContainerHighest,
++        borderRadius: BorderRadius.circular(20),
++      ),
++      child: Row(
++        mainAxisSize: MainAxisSize.min,
++        children: [
++          const Text('ALVO', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900)),
++          const SizedBox(width: 12),
++          Icon(_focusIcon(target.shape), color: _focusColor(target.tone), size: 38),
++        ],
++      ),
++    );
++  }
++}
++
++IconData _focusIcon(StimulusShape shape) {
++  switch (shape) {
++    case StimulusShape.star:
++      return Icons.star_rounded;
++    case StimulusShape.circle:
++      return Icons.circle;
++    case StimulusShape.triangle:
++      return Icons.change_history_rounded;
++    case StimulusShape.square:
++      return Icons.square_rounded;
++    case StimulusShape.heart:
++      return Icons.favorite_rounded;
++  }
++}
++
++Color _focusColor(StimulusTone tone) {
++  switch (tone) {
++    case StimulusTone.blue:
++      return const Color(0xFF2F63D8);
++    case StimulusTone.green:
++      return const Color(0xFF45A56A);
++    case StimulusTone.orange:
++      return const Color(0xFFF19A38);
++    case StimulusTone.purple:
++      return const Color(0xFF8B5FC7);
++    case StimulusTone.pink:
++      return const Color(0xFFD85D8B);
++  }
++}
++
+ class _StimulusGrid extends StatelessWidget {
+   const _StimulusGrid({
+     required this.trial,
+@@ -533,8 +590,8 @@ class _StimulusGrid extends StatelessWidget {
+                 borderRadius: BorderRadius.circular(24),
+                 child: Center(
+                   child: Icon(
+-                    _iconFor(item.shape),
+-                    color: _colorFor(item.tone),
++                    _focusIcon(item.shape),
++                    color: _focusColor(item.tone),
+                     size: count <= 6 ? 58 : 46,
+                   ),
+                 ),
+@@ -546,35 +603,7 @@ class _StimulusGrid extends StatelessWidget {
+     );
+   }
+ 
+-  IconData _iconFor(StimulusShape shape) {
+-    switch (shape) {
+-      case StimulusShape.star:
+-        return Icons.star_rounded;
+-      case StimulusShape.circle:
+-        return Icons.circle;
+-      case StimulusShape.triangle:
+-        return Icons.change_history_rounded;
+-      case StimulusShape.square:
+-        return Icons.square_rounded;
+-      case StimulusShape.heart:
+-        return Icons.favorite_rounded;
+-    }
+-  }
+ 
+-  Color _colorFor(StimulusTone tone) {
+-    switch (tone) {
+-      case StimulusTone.blue:
+-        return const Color(0xFF2F63D8);
+-      case StimulusTone.green:
+-        return const Color(0xFF45A56A);
+-      case StimulusTone.orange:
+-        return const Color(0xFFF19A38);
+-      case StimulusTone.purple:
+-        return const Color(0xFF8B5FC7);
+-      case StimulusTone.pink:
+-        return const Color(0xFFD85D8B);
+-    }
+-  }
+ }
+ 
+ class _PauseView extends StatelessWidget {
+diff --git a/lib/features/g01_focus/stimulus.dart b/lib/features/g01_focus/stimulus.dart
+index 5589d1f..4ed9e68 100644
+--- a/lib/features/g01_focus/stimulus.dart
++++ b/lib/features/g01_focus/stimulus.dart
+@@ -6,6 +6,18 @@ enum StimulusShape { star, circle, triangle, square, heart }
+ 
+ enum StimulusTone { blue, green, orange, purple, pink }
+ 
++class FocusTarget {
++  const FocusTarget({required this.shape, required this.to
