@@ -1,0 +1,145 @@
+   const Expanded(
+                 child: Text(
+-                  'NeuroProfile',
++                  'Indicadores por missão',
+                   style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
+                 ),
+               ),
+               Text('${profile.sessionCount} sessões'),
+             ],
+           ),
+-          const SizedBox(height: 18),
++          const SizedBox(height: 8),
++          const Text(
++            'Cada indicador só aparece após 3 sessões do mesmo jogo. Jogos diferentes não são combinados em uma “nota global”.',
++            style: TextStyle(fontSize: 13, height: 1.4),
++          ),
++          const SizedBox(height: 16),
++          if (!profile.hasData)
++            const Text(
++              'Ainda não há repetição suficiente dentro de uma mesma missão para formar um indicador longitudinal.',
++              style: TextStyle(height: 1.4),
++            ),
+           if (profile.sustainedAttentionIndicator != null)
+             _Indicator(
+-              label: 'Atenção no gameplay',
++              label: 'Missão Foco • desempenho na busca visual',
+               value: profile.sustainedAttentionIndicator!,
+             ),
+           if (profile.inhibitoryControlIndicator != null)
+             _Indicator(
+-              label: 'Controle inibitório no gameplay',
++              label: 'Pare, Pense, Vá! • desempenho no controle de resposta',
+               value: profile.inhibitoryControlIndicator!,
+             ),
+           if (profile.workingMemoryIndicator != null)
+             _Indicator(
+-              label: 'Memória de trabalho no gameplay',
++              label: 'Memória Mágica • desempenho em sequências',
+               value: profile.workingMemoryIndicator!,
+             ),
+           if (profile.cognitiveFlexibilityIndicator != null)
+             _Indicator(
+-              label: 'Flexibilidade cognitiva no gameplay',
++              label: 'Troca-Troca • adaptação à mudança de regra',
+               value: profile.cognitiveFlexibilityIndicator!,
+             ),
+           if (profile.selfRegulationPracticeIndicator != null)
+             _Indicator(
+-              label: 'Prática de autorregulação no gameplay',
++              label: 'Montanha da Calma • conclusão das práticas guiadas',
+               value: profile.selfRegulationPracticeIndicator!,
+             ),
+           if (profile.socialEmotionalLearningIndicator != null)
+             _Indicator(
+-              label: 'Aprendizagem socioemocional no gameplay',
++              label: 'Mundo dos Amigos • escolhas respeitosas nas histórias',
+               value: profile.socialEmotionalLearningIndicator!,
+             ),
+-          if (profile.responseConsistencyIndicator != null)
+-            _Indicator(
+-              label: 'Consistência do tempo de resposta',
+-              value: profile.responseConsistencyIndicator!,
+-            ),
+-          if (profile.overallGameplayIndicator != null)
+-            _Indicator(
+-              label: 'Indicador global de gameplay',
+-              value: profile.overallGameplayIndicator!,
+-            ),
+-          const SizedBox(height: 8),
+-          Text(
+-            'Dificuldade média adaptativa: ${profile.averageDifficulty!.toStringAsFixed(1)} / 5',
+-          ),
+-          const SizedBox(height: 4),
+-          Text('Tendência recente: ${_trendLabel(profile.trend)}'),
+         ],
+       ),
+     );
+   }
+-
+-  String _trendLabel(String value) {
+-    switch (value) {
+-      case 'improving':
+-        return 'melhora no desempenho do jogo';
+-      case 'declining':
+-        return 'queda recente — revisar carga e contexto';
+-      case 'stable':
+-        return 'estável';
+-      default:
+-        return 'dados ainda insuficientes';
+-    }
+-  }
+ }
+ 
+ class _Indicator extends StatelessWidget {
+@@ -436,11 +416,13 @@ class _Indicator extends StatelessWidget {
+         crossAxisAlignment: CrossAxisAlignment.start,
+         children: [
+           Row(
++            crossAxisAlignment: CrossAxisAlignment.start,
+             children: [
+               Expanded(child: Text(label)),
++              const SizedBox(width: 8),
+               Text(
+                 '${value.toStringAsFixed(0)}%',
+-                style: const TextStyle(fontWeight: FontWeight.w800),
++                style: const TextStyle(fontWeight: FontWeight.w900),
+               ),
+             ],
+           ),
+@@ -455,9 +437,9 @@ class _Indicator extends StatelessWidget {
+ class _DatasetQualityCard extends StatelessWidget {
+   const _DatasetQualityCard({required this.snapshot});
+   final DatasetQualitySnapshot snapshot;
++
+   @override
+   Widget build(BuildContext context) {
+-    String pct(double v) => '${(v * 100).toStringAsFixed(0)}%';
+     return Container(
+       padding: const EdgeInsets.all(18),
+       decoration: BoxDecoration(
+@@ -468,26 +450,18 @@ class _DatasetQualityCard extends StatelessWidget {
+         crossAxisAlignment: CrossAxisAlignment.start,
+         children: [
+           const Text(
+-            'Qualidade dos dados',
++            'Histórico disponível',
+             style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+           ),
+           const SizedBox(height: 10),
++          Text('${snapshot.totalFeatureSessions} sessões concluídas com dados válidos'),
+           Text(
+-            '${snapshot.totalFeatureSessions} sessões com vetor de features',
+-          ),
+-          Text(
+-            'Longitudinal: ${snapshot.longitudinalEligible} (${pct(snapshot.longitudinalEligibilityRate)})',
+-          ),
+-          Text(
+-            'ML shadow: ${snapshot.mlShadowEligible} (${pct(snapshot.mlShadowEligibilityRate)})',
+-          ),
+-          Text(
+-            'Cobertura dos 6 jogos: ${snapshot.hasAllSixGames ? 'completa' : 'ainda incompleta'}',
++            'Cobertura das 6 missões: ${snapshot.hasAllSixGames ? 'completa' : 'ainda incompleta'}',
+           ),
+           const SizedBox(height: 8),
+   
