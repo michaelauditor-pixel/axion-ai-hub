@@ -1,0 +1,168 @@
+escolhe uma estratégia e o aplicativo conduz uma prática curta passo a passo. A proposta é aprender e repetir ferramentas de autorregulação, não adivinhar o que a criança está sentindo.',
++            parentObservation:
++                'Observe quais estratégias a criança aceita praticar, quais conclui e se consegue reproduzi-las com apoio fora do jogo.',
++            boundary:
++                'O módulo não diagnostica emoções, não mede crise, agressividade ou irritabilidade e não deve ser usado como ferramenta de emergência.',
++          ),
++          _GameGuideCard(
++            number: '06',
++            title: 'Mundo dos Amigos',
++            icon: Icons.diversity_1_rounded,
++            whatItPractices:
++                'Leitura de contexto, alternativas sociais, respeito a limites e solução de situações interpessoais simples.',
++            howItWorks:
++                'Histórias curtas apresentam situações do cotidiano. Mais de uma resposta pode ser respeitosa; o aplicativo explica as consequências sem impor uma única forma “correta” de socializar.',
++            parentObservation:
++                'Observe se a criança identifica alternativas seguras e respeitosas e se consegue explicar por que uma escolha pode ajudar ou atrapalhar a situação.',
++            boundary:
++                'Não é treinamento de mascaramento, não mede empatia clínica e não trata autismo ou dificuldades sociais.',
++          ),
++          SizedBox(height: 14),
++          _SafetyCard(),
++          SizedBox(height: 14),
++          _MarketCard(),
++        ],
++      ),
++    );
++  }
++}
++
++class _IntroCard extends StatelessWidget {
++  const _IntroCard();
++
++  @override
++  Widget build(BuildContext context) {
++    return _SectionCard(
++      color: const Color(0xFFEAF0FF),
++      child: Column(
++        crossAxisAlignment: CrossAxisAlignment.start,
++        children: [
++          const Text(
++            ProductInfo.productName,
++            style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900),
++          ),
++          const SizedBox(height: 6),
++          const Text(
++            'Faixa recomendada: ${ProductInfo.recommendedAge}',
++            style: TextStyle(fontWeight: FontWeight.w800),
++          ),
++          const SizedBox(height: 12),
++          const Text(ProductInfo.positioning, style: TextStyle(height: 1.45)),
++          const SizedBox(height: 10),
++          const Text(ProductInfo.audience, style: TextStyle(height: 1.45)),
++          const SizedBox(height: 10),
++          const Text(
++            ProductInfo.clinicalBoundary,
++            style: TextStyle(height: 1.45, fontWeight: FontWeight.w700),
++          ),
++        ],
++      ),
++    );
++  }
++}
++
++class _GameGuideCard extends StatelessWidget {
++  const _GameGuideCard({
++    required this.number,
++    required this.title,
++    required this.icon,
++    required this.whatItPractices,
++    required this.howItWorks,
++    required this.parentObservation,
++    required this.boundary,
++  });
++
++  final String number;
++  final String title;
++  final IconData icon;
++  final String whatItPractices;
++  final String howItWorks;
++  final String parentObservation;
++  final String boundary;
++
++  @override
++  Widget build(BuildContext context) {
++    return Padding(
++      padding: const EdgeInsets.only(bottom: 12),
++      child: _SectionCard(
++        color: Theme.of(context).colorScheme.surfaceContainerLow,
++        child: Column(
++          crossAxisAlignment: CrossAxisAlignment.start,
++          children: [
++            Row(
++              children: [
++                Container(
++                  width: 48,
++                  height: 48,
++                  decoration: BoxDecoration(
++                    color: Theme.of(context).colorScheme.primaryContainer,
++                    borderRadius: BorderRadius.circular(16),
++                  ),
++                  child: Icon(icon),
++                ),
++                const SizedBox(width: 12),
++                Expanded(
++                  child: Column(
++                    crossAxisAlignment: CrossAxisAlignment.start,
++                    children: [
++                      Text(
++                        'MISSÃO $number',
++                        style: TextStyle(
++                          fontSize: 11,
++                          letterSpacing: 1.2,
++                          fontWeight: FontWeight.w900,
++                          color: Theme.of(context).colorScheme.primary,
++                        ),
++                      ),
++                      Text(
++                        title,
++                        style: const TextStyle(
++                          fontSize: 21,
++                          fontWeight: FontWeight.w900,
++                        ),
++                      ),
++                    ],
++                  ),
++                ),
++              ],
++            ),
++            const SizedBox(height: 16),
++            _GuideLine(label: 'Pratica', body: whatItPractices),
++            _GuideLine(label: 'Como funciona', body: howItWorks),
++            _GuideLine(label: 'O que observar', body: parentObservation),
++            _GuideLine(label: 'Limite da medida', body: boundary),
++          ],
++        ),
++      ),
++    );
++  }
++}
++
++class _GuideLine extends StatelessWidget {
++  const _GuideLine({required this.label, required this.body});
++  final String label;
++  final String body;
++
++  @override
++  Widget build(BuildContext context) {
++    return Padding(
++      padding: const EdgeInsets.only(bottom: 10),
++      child: RichText(
++        text: TextSpan(
++          style: DefaultTextStyle.of(context).style.copyWith(height: 1.42),
++          children: [
++            TextSpan(
++              text: '$label: ',
++              style: const TextStyle(fontWeight: FontWeight.w900),
++            ),
++            TextSpan(text: body),
++          ],
++        ),
++      ),
++    );
++  }
++}
++
++class _SafetyCard extends StatelessWidget {
++  const _SafetyCard();
++
