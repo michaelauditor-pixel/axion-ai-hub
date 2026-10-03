@@ -1,0 +1,119 @@
+
++  @override
++  Widget build(BuildContext context) {
++    return const _SectionCard(
++      color: Color(0xFFFFF5E8),
++      child: Column(
++        crossAxisAlignment: CrossAxisAlignment.start,
++        children: [
++          Text(
++            'Segurança, privacidade e desenvolvedor',
++            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
++          ),
++          SizedBox(height: 10),
++          Text(ProductInfo.privacy, style: TextStyle(height: 1.45)),
++          SizedBox(height: 10),
++          Text(
++            'Desenvolvimento: ${ProductInfo.developerDisplay}.',
++            style: TextStyle(height: 1.45),
++          ),
++          SizedBox(height: 10),
++          Text(
++            'Na publicação comercial, a loja e a política de privacidade devem exibir a identificação jurídica e o canal oficial de suporte do responsável pelo aplicativo.',
++            style: TextStyle(height: 1.45),
++          ),
++        ],
++      ),
++    );
++  }
++}
++
++class _MarketCard extends StatelessWidget {
++  const _MarketCard();
++
++  @override
++  Widget build(BuildContext context) {
++    return const _SectionCard(
++      color: Color(0xFFEAF8F2),
++      child: Column(
++        crossAxisAlignment: CrossAxisAlignment.start,
++        children: [
++          Text(
++            'Mercados e idiomas',
++            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
++          ),
++          SizedBox(height: 10),
++          Text(
++            'Idioma atual: ${ProductInfo.primaryLanguage}.',
++            style: TextStyle(height: 1.45),
++          ),
++          SizedBox(height: 8),
++          Text(ProductInfo.international, style: TextStyle(height: 1.45)),
++          SizedBox(height: 8),
++          Text(
++            'Inglês e espanhol são os próximos idiomas prioritários. Os jogos cognitivos podem ser localizados com pouca alteração de mecânica; histórias sociais exigem revisão cultural, não apenas tradução literal.',
++            style: TextStyle(height: 1.45),
++          ),
++        ],
++      ),
++    );
++  }
++}
++
++class _SectionCard extends StatelessWidget {
++  const _SectionCard({required this.color, required this.child});
++  final Color color;
++  final Widget child;
++
++  @override
++  Widget build(BuildContext context) {
++    return Container(
++      padding: const EdgeInsets.all(18),
++      decoration: BoxDecoration(
++        color: color,
++        borderRadius: BorderRadius.circular(24),
++      ),
++      child: child,
++    );
++  }
++}
+diff --git a/test/v21_product_alignment_test.dart b/test/v21_product_alignment_test.dart
+new file mode 100644
+index 0000000..fee9c0e
+--- /dev/null
++++ b/test/v21_product_alignment_test.dart
+@@ -0,0 +1,34 @@
++import 'package:flutter_test/flutter_test.dart';
++import 'package:neurocore_app/core/product/product_info.dart';
++import 'package:neurocore_app/core/profile/neuro_profile_aggregator.dart';
++import 'package:neurocore_app/features/g06_social/social_scenario.dart';
++
++void main() {
++  test('V2.1 has explicit age and neuroeducational boundary', () {
++    expect(ProductInfo.version, '2.1.0+21');
++    expect(ProductInfo.recommendedAge, '6 a 11 anos');
++    expect(ProductInfo.positioning.toLowerCase(), contains('neuroeducacional'));
++    expect(ProductInfo.clinicalBoundary.toLowerCase(), contains('não realiza diagnóstico'));
++    expect(ProductInfo.audience.toLowerCase(), contains('sem afirmar tratamento'));
++  });
++
++  test('parent indicators require repeated sessions in the same domain', () {
++    expect(NeuroProfileAggregator.minimumSessionsPerDomain, 3);
++  });
++
++  test('every social story offers more than one respectful path', () {
++    expect(SocialScenario.examples.length, greaterThanOrEqualTo(8));
++    for (final scenario in SocialScenario.examples) {
++      expect(
++        scenario.choices.where((choice) => choice.supportive).length,
++        greaterThanOrEqualTo(2),
++        reason: scenario.story,
++      );
++      expect(
++        scenario.choices.where((choice) => !choice.supportive).length,
++        greaterThanOrEqualTo(1),
++        reason: scenario.story,
++      );
++    }
++  });
++}
