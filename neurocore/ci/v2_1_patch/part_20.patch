@@ -1,0 +1,147 @@
+        const Text(
+-            'Gate técnico de qualidade de dados; não classifica a criança.',
+-            style: TextStyle(fontSize: 12),
++            'Dados de sessão servem para acompanhar o desempenho dentro do aplicativo; não classificam nem diagnosticam a criança.',
++            style: TextStyle(fontSize: 12, height: 1.4),
+           ),
+         ],
+       ),
+diff --git a/lib/ml/feature_contract.dart b/lib/ml/feature_contract.dart
+index c6e3a61..5602975 100644
+--- a/lib/ml/feature_contract.dart
++++ b/lib/ml/feature_contract.dart
+@@ -171,8 +171,10 @@ class SessionFeatureVectorV1 {
+       sessionId: sessionId,
+       gameId: summary['game_id']?.toString() ?? 'G06_mundo_amigos',
+       completedAt: completedAt,
+-      hitRate: _unit(_asDouble(performance['context_match_rate'])),
+-      commissionRate: _unit(_asDouble(performance['mismatch_rate'])),
++      hitRate: _unit(_asDouble(performance['supportive_choice_rate'])),
++      commissionRate: _unit(
++        _asDouble(performance['non_supportive_choice_rate'] ?? performance['mismatch_rate']),
++      ),
+       omissionRate: _unit(_asDouble(performance['omission_rate'])),
+       reactionTimeCv: _nonNegative(_asDouble(performance['reaction_time_cv'])),
+       medianReactionTimeMs: _asNullableInt(
+diff --git a/pubspec.yaml b/pubspec.yaml
+index c7e666c..33586d5 100644
+--- a/pubspec.yaml
++++ b/pubspec.yaml
+@@ -1,7 +1,7 @@
+ name: neurocore_app
+-description: NeuroCore V1.9 AUDITED - plataforma neuroeducacional infantil offline-first com acessibilidade, privacidade, QA e release hardening.
++description: NeuroCore V2.1 - plataforma neuroeducacional infantil com conteúdo alinhado, guia parental, acessibilidade e privacidade.
+ publish_to: "none"
+-version: 1.9.0+19
++version: 2.1.0+21
+ 
+ environment:
+   sdk: ">=3.10.0 <4.0.0"
+@@ -9,6 +9,7 @@ environment:
+ dependencies:
+   flutter:
+     sdk: flutter
++  audioplayers: 6.8.1
+   cryptography: ^2.9.0
+   flutter_secure_storage: 10.3.1
+   path: ^1.9.1
+@@ -21,3 +22,5 @@ dev_dependencies:
+ 
+ flutter:
+   uses-material-design: true
++  assets:
++    - assets/audio/
+diff --git a/test/g05_g06_feature_contract_test.dart b/test/g05_g06_feature_contract_test.dart
+index 087f307..e0a1241 100644
+--- a/test/g05_g06_feature_contract_test.dart
++++ b/test/g05_g06_feature_contract_test.dart
+@@ -30,7 +30,9 @@ void main() {
+         'final_difficulty': 2,
+         'performance': {
+           'context_match_rate': .8,
++          'supportive_choice_rate': .8,
+           'mismatch_rate': .2,
++          'non_supportive_choice_rate': .2,
+           'omission_rate': 0.0,
+           'reaction_time_cv': .2,
+           'median_reaction_time_ms': 900,
+diff --git a/test/neuro_profile_aggregator_test.dart b/test/neuro_profile_aggregator_test.dart
+index ad8f563..7b17627 100644
+--- a/test/neuro_profile_aggregator_test.dart
++++ b/test/neuro_profile_aggregator_test.dart
+@@ -3,31 +3,34 @@ import 'package:neurocore_app/core/profile/neuro_profile_aggregator.dart';
+ import 'package:neurocore_app/ml/feature_contract.dart';
+ 
+ void main() {
+-  test('aggregator forms non-diagnostic longitudinal indicators', () {
+-    final features = List<SessionFeatureVectorV1>.generate(6, (index) {
+-      return SessionFeatureVectorV1(
+-        profileId: 'p1',
++  SessionFeatureVectorV1 feature(int index) => SessionFeatureVectorV1(
++        profileId: 'p',
+         sessionId: 's$index',
+         gameId: 'G01_missao_foco',
+-        completedAt: DateTime.utc(2026, 8, 1 + index),
+-        hitRate: 0.70 + (index * 0.04),
+-        commissionRate: 0.20 - (index * 0.02),
+-        omissionRate: 0.20 - (index * 0.02),
+-        reactionTimeCv: 0.35 - (index * 0.03),
+-        medianReactionTimeMs: 900 - (index * 20),
+-        finalDifficulty: 2 + (index ~/ 3),
++        completedAt: DateTime.utc(2026, 8, index + 1),
++        hitRate: .80 + index * .03,
++        commissionRate: .12 - index * .01,
++        omissionRate: .08,
++        reactionTimeCv: .20,
++        medianReactionTimeMs: 700,
++        finalDifficulty: 2,
+         blocksCompleted: 5,
+       );
+-    });
+ 
+-    final view = const NeuroProfileAggregator().aggregate(
+-      profileId: 'p1',
+-      features: features,
++  test('aggregator waits for three sessions in same game', () {
++    final two = const NeuroProfileAggregator().aggregate(
++      profileId: 'p',
++      features: [feature(0), feature(1)],
+     );
++    expect(two.sustainedAttentionIndicator, isNull);
++    expect(two.hasData, isFalse);
+ 
+-    expect(view.sessionCount, 6);
+-    expect(view.overallGameplayIndicator, isNotNull);
+-    expect(view.overallGameplayIndicator!, inInclusiveRange(0, 100));
+-    expect(view.trend, anyOf('improving', 'stable'));
++    final three = const NeuroProfileAggregator().aggregate(
++      profileId: 'p',
++      features: [feature(0), feature(1), feature(2)],
++    );
++    expect(three.sustainedAttentionIndicator, isNotNull);
++    expect(three.sustainedAttentionIndicator!, inInclusiveRange(0, 100));
++    expect(three.overallGameplayIndicator, isNull);
+   });
+ }
+diff --git a/test/neuro_profile_multidomain_test.dart b/test/neuro_profile_multidomain_test.dart
+index cb364b4..88ee193 100644
+--- a/test/neuro_profile_multidomain_test.dart
++++ b/test/neuro_profile_multidomain_test.dart
+@@ -24,25 +24,50 @@ void main() {
+     );
+   }
+ 
+-  test('each game feeds its own NeuroProfile domain', () {
++  test('domain indicator requires three sessions of that same game', () {
+     final view = const NeuroProfileAggregator().aggregate(
+       profileId: 'p1',
+       features: [
+-        feature('G01_missao_foco', 1, 0.85, 0.10),
+-        feature('G02_pare_pense_va', 2, 0.90, 0.08),
+-        feature('G03_memoria_magica', 3, 0.82, 0.12),
+-        feature('G04_troca_troca', 4, 0.80, 0.10),
+-        feature('G05_montanha_calma', 5, 0.84, 0.08),
+-        feature('G06_mundo_amigos', 6, 0.86, 0.07),
++        feature('G01_missao_foco', 1, 0.80, 0.12),
++        feature('G01_missao_foco', 2, 0.84, 0.10),
++        feature('G02_pare_pense_va', 3, 0.90
