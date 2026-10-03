@@ -1,0 +1,183 @@
+ne});
++
++  final StimulusShape shape;
++  final StimulusTone tone;
++
++  Map<String, Object?> toJson() => {
++    'shape': shape.name,
++    'tone': tone.name,
++  };
++}
++
+ class StimulusItem {
+   const StimulusItem({
+     required this.shape,
+@@ -25,42 +37,51 @@ class StimulusItem {
+ }
+ 
+ class FocusTrial {
+-  const FocusTrial({required this.items, required this.targetPresent});
++  const FocusTrial({
++    required this.items,
++    required this.targetPresent,
++    required this.target,
++  });
+ 
+   final List<StimulusItem> items;
+   final bool targetPresent;
++  final FocusTarget target;
+ 
+   Map<String, Object?> toJson() => {
+     'target_present': targetPresent,
++    'target': target.toJson(),
+     'items': items.map((item) => item.toJson()).toList(),
+   };
+ }
+ 
+ class FocusTrialGenerator {
+-  FocusTrialGenerator({Random? random}) : _random = random ?? Random();
++  FocusTrialGenerator({Random? random}) : _random = random ?? Random.secure();
+ 
+   final Random _random;
+ 
+   FocusTrial generate(DifficultyConfig config, {bool? targetPresentOverride}) {
+     final targetPresent =
+-        targetPresentOverride ??
+-        _random.nextDouble() < config.targetProbability;
++        targetPresentOverride ?? _random.nextDouble() < config.targetProbability;
++    final target = FocusTarget(
++      shape: StimulusShape.values[_random.nextInt(StimulusShape.values.length)],
++      tone: StimulusTone.values[_random.nextInt(StimulusTone.values.length)],
++    );
+     final items = <StimulusItem>[];
+ 
+     for (var i = 0; i < config.itemCount; i += 1) {
+-      items.add(_distractor(config));
++      items.add(_distractor(config, target));
+     }
+ 
+     if (targetPresent) {
+       final targetIndex = _random.nextInt(config.itemCount);
+-      items[targetIndex] = const StimulusItem(
+-        shape: StimulusShape.star,
+-        tone: StimulusTone.blue,
++      items[targetIndex] = StimulusItem(
++        shape: target.shape,
++        tone: target.tone,
+         isTarget: true,
+       );
+     }
+ 
+-    return FocusTrial(items: items, targetPresent: targetPresent);
++    return FocusTrial(items: items, targetPresent: targetPresent, target: target);
+   }
+ 
+   List<bool> generatePresenceSchedule(
+@@ -98,7 +119,6 @@ class FocusTrialGenerator {
+       if (valid(schedule)) return List<bool>.of(schedule);
+     }
+ 
+-    // Fallback alternado preservando a contagem planejada.
+     final result = <bool>[];
+     var remainingTargets = targetCount;
+     var remainingAbsent = trialCount - targetCount;
+@@ -116,35 +136,33 @@ class FocusTrialGenerator {
+     return result;
+   }
+ 
+-  StimulusItem _distractor(DifficultyConfig config) {
+-    if (config.conjunctionDistractors) {
+-      final tricky = _random.nextDouble();
+-      if (tricky < 0.28) {
+-        return const StimulusItem(
+-          shape: StimulusShape.star,
+-          tone: StimulusTone.orange,
+-          isTarget: false,
+-        );
+-      }
+-      if (tricky < 0.56) {
+-        return const StimulusItem(
+-          shape: StimulusShape.circle,
+-          tone: StimulusTone.blue,
++  StimulusItem _distractor(DifficultyConfig config, FocusTarget target) {
++    final useNearDistractor = config.conjunctionDistractors && _random.nextDouble() < .58;
++
++    if (useNearDistractor) {
++      if (_random.nextBool()) {
++        final tones = StimulusTone.values.where((tone) => tone != target.tone).toList();
++        return StimulusItem(
++          shape: target.shape,
++          tone: tones[_random.nextInt(tones.length)],
+           isTarget: false,
+         );
+       }
++      final shapes = StimulusShape.values.where((shape) => shape != target.shape).toList();
++      return StimulusItem(
++        shape: shapes[_random.nextInt(shapes.length)],
++        tone: target.tone,
++        isTarget: false,
++      );
+     }
+ 
+-    final shapes = StimulusShape.values
+-        .where((shape) => shape != StimulusShape.star)
+-        .toList();
+-    final tones = StimulusTone.values
+-        .where((tone) => tone != StimulusTone.blue)
+-        .toList();
+-    return StimulusItem(
+-      shape: shapes[_random.nextInt(shapes.length)],
+-      tone: tones[_random.nextInt(tones.length)],
+-      isTarget: false,
+-    );
++    StimulusShape shape;
++    StimulusTone tone;
++    do {
++      shape = StimulusShape.values[_random.nextInt(StimulusShape.values.length)];
++      tone = StimulusTone.values[_random.nextInt(StimulusTone.values.length)];
++    } while (shape == target.shape && tone == target.tone);
++
++    return StimulusItem(shape: shape, tone: tone, isTarget: false);
+   }
+ }
+diff --git a/lib/features/g03_memory/g03_screen.dart b/lib/features/g03_memory/g03_screen.dart
+index 536032a..ad9bb7b 100644
+--- a/lib/features/g03_memory/g03_screen.dart
++++ b/lib/features/g03_memory/g03_screen.dart
+@@ -532,7 +532,11 @@ class _PresentedMemorySymbol extends StatelessWidget {
+                 color: Theme.of(context).colorScheme.primaryContainer,
+                 borderRadius: BorderRadius.circular(44),
+               ),
+-              child: Icon(_memoryIcon(symbol!), size: 108),
++              child: Icon(
++                _memoryIcon(symbol!),
++                size: 108,
++                color: _memoryColor(symbol!),
++              ),
+             ),
+     );
+   }
+@@ -572,7 +576,11 @@ class _MemoryResponsePad extends StatelessWidget {
+               height: 92,
+               child: FilledButton.tonal(
+                 onPressed: enabled ? () => onTap(index) : null,
+-                child: Icon(_memoryIcon(index), size: 42),
++                child: Icon(
++                  _memoryIcon(index),
++                  size: 42,
++                  color: _memoryColor(index),
++                ),
+               ),
+             );
+           }),
+@@ -594,6 +602,18 @@ IconData _memoryIcon(int index) {
+   return icons[index.clamp(0, icons.length - 1).toInt()];
+ }
+ 
++Color _memoryColor(int index) {
++  const colors = <Color>[
++    Color(0xFF4F67D8),
++    Color(0xFFE05D83),
++    Color(0xFF2E9A67),
++    Color(0xFFE4952D),
++    Color(0
