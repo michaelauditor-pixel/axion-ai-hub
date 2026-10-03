@@ -1,0 +1,174 @@
+[choiceIndex];
++    final supportive = choice.supportive;
++    if (supportive) {
++      _matches += 1;
++      _supportive += 1;
+       await widget.services.feedback.correct();
+     } else {
+       await widget.services.feedback.gentleMiss();
+     }
+     _times.add(elapsed);
++
+     await _record('social_choice', {
+       'trial': _index + 1,
+-      'choice_display_index': choice,
+-      'choice_text': p.choices[choice],
+-      'preferred_display_index': p.preferredIndex,
+-      'context_match': matched,
++      'choice_display_index': choiceIndex,
++      'choice_text': choice.text,
++      'supportive_choice': supportive,
++      'context_match': supportive,
+       'reaction_time_ms': elapsed,
+     });
++
+     if (!mounted) return;
+-    setState(
+-      () => _feedback = matched
+-          ? 'Boa leitura da situação.'
+-          : 'Outra resposta pode respeitar melhor o que a pessoa precisa.',
+-    );
+-    await Future<void>.delayed(const Duration(milliseconds: 800));
++    setState(() => _feedback = choice.feedback);
++    await Future<void>.delayed(const Duration(milliseconds: 1300));
+     await _next();
+   }
+ 
+   Future<void> _handleOmission() async {
+     if (_resolved || _done || _presented == null) return;
+     _resolved = true;
+-    _omissions++;
++    _omissions += 1;
+     await _record('social_choice_omitted', {
+       'trial': _index + 1,
+       'response_window_ms': _responseWindowMs,
+     });
+     await widget.services.feedback.gentleMiss();
+-    if (mounted)
++    if (mounted) {
+       setState(() => _feedback = 'Tudo bem. Vamos conhecer outra situação.');
+-    await Future<void>.delayed(const Duration(milliseconds: 700));
++    }
++    await Future<void>.delayed(const Duration(milliseconds: 800));
+     await _next();
+   }
+ 
+@@ -153,26 +156,28 @@ class _G06SocialScreenState extends State<G06SocialScreen> {
+       await _finish();
+       return;
+     }
++
+     if (completed % 2 == 0) {
+-      final perf = SocialPerformanceSnapshot(
++      final performance = SocialPerformanceSnapshot(
+         trials: completed,
+         contextMatches: _matches,
+         supportiveChoices: _supportive,
+         omissions: _omissions,
+         reactionTimesMs: _times,
+       );
+-      final d = _engine.evaluate(state: _state, performance: perf);
+-      _state = d.nextState;
++      final decision = _engine.evaluate(state: _state, performance: performance);
++      _state = decision.nextState;
+       await _record('difficulty_reviewed', {
+         'trial': completed,
+         'difficulty_after': _state.level,
+-        'reason': d.reasonCode,
++        'reason': decision.reasonCode,
+       });
+     }
++
+     if (!mounted) return;
+     setState(() {
+-      _index++;
+-      _feedback = 'Leia a situação e escolha com calma.';
++      _index += 1;
++      _feedback = 'Escolha uma alternativa e veja o que ela pode causar.';
+     });
+     _prepareTrial();
+     if (mounted) setState(() {});
+@@ -180,7 +185,7 @@ class _G06SocialScreenState extends State<G06SocialScreen> {
+ 
+   Future<void> _finish() async {
+     _responseTimer?.cancel();
+-    final perf = SocialPerformanceSnapshot(
++    final performance = SocialPerformanceSnapshot(
+       trials: _trialsPerSession,
+       contextMatches: _matches,
+       supportiveChoices: _supportive,
+@@ -191,8 +196,8 @@ class _G06SocialScreenState extends State<G06SocialScreen> {
+       'game_id': _gameId,
+       'blocks_completed': 3,
+       'final_difficulty': _state.level,
+-      'performance': perf.toJson(),
+-      'note': 'social_learning_not_masking_or_diagnosis',
++      'performance': performance.toJson(),
++      'note': 'social_learning_multiple_valid_responses_non_diagnostic',
+     };
+     final features = widget.services.neuroProfile.buildCompletedG06(
+       profileId: widget.profileId,
+@@ -209,14 +214,14 @@ class _G06SocialScreenState extends State<G06SocialScreen> {
+     if (mounted) setState(() {});
+   }
+ 
+-  Future<void> _record(String t, Map<String, Object?> p) async {
++  Future<void> _record(String type, Map<String, Object?> payload) async {
+     final id = _sessionId;
+-    if (id != null)
+-      await widget.services.telemetry.record(
+-        sessionId: id,
+-        eventType: t,
+-        payload: p,
+-      );
++    if (id == null) return;
++    await widget.services.telemetry.record(
++      sessionId: id,
++      eventType: type,
++      payload: payload,
++    );
+   }
+ 
+   Future<void> _abandonSilently() async {
+@@ -231,107 +236,174 @@ class _G06SocialScreenState extends State<G06SocialScreen> {
+         payload: {'trial': _index + 1},
+       );
+       await widget.services.repository.abandonSession(sessionId: id);
+-    } catch (_) {}
++    } catch (_) {
++      // Dispose deve permanecer silencioso.
++    }
+   }
+ 
+   @override
+   Widget build(BuildContext context) {
+-    if (_done)
++    if (_done) {
+       return Scaffold(
+-        appBar: AppBar(title: const Text('G06 • Mundo dos Amigos')),
+-        body: Center(
+-          child: Column(
+-            mainAxisSize: MainAxisSize.min,
+-            children: [
+-              const GameVisualStrip(kind: GameVisualKind.social, height: 125),
+-              const SizedBox(height: 16),
+-              const Text(
+-                'Missão concluída!',
+-                style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900),
+-              ),
+-              const SizedBox(height: 24),
+-              FilledButton(
+-                onPressed: () => Navigator.of(context).pop(),
+-                child: const Text('Voltar'),
++        body: SafeArea(
++          child: Center(
++            child: Padding(
++              padding: const EdgeInsets.all(28),
++              child: Column(
++                mainAxisSize: MainAxisSize.min,
++                children: [
++                  const Icon(Icons.diversity_1_rounded, size: 86, color: Color(0xFFD46F35)),
++                  const SizedBox(height: 18),
++                  const Text(
++                    'Histórias concluídas!',
++                    textAlign: TextAlign.cente
