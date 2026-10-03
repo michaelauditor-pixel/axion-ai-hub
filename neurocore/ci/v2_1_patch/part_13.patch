@@ -1,0 +1,185 @@
+ib/features/g06_social/social_scenario.dart
+@@ -1,122 +1,240 @@
+ import 'dart:math';
+ 
++class SocialChoice {
++  const SocialChoice({
++    required this.text,
++    required this.supportive,
++    required this.feedback,
++  });
++
++  final String text;
++  final bool supportive;
++  final String feedback;
++}
++
+ class PresentedSocialScenario {
+   const PresentedSocialScenario({
+     required this.story,
++    required this.scene,
+     required this.choices,
+-    required this.preferredIndex,
+   });
++
+   final String story;
+-  final List<String> choices;
+-  final int preferredIndex;
++  final String scene;
++  final List<SocialChoice> choices;
++
++  Set<int> get supportiveIndices => {
++        for (var i = 0; i < choices.length; i++)
++          if (choices[i].supportive) i,
++      };
+ }
+ 
+ class SocialScenario {
+   const SocialScenario({
+     required this.story,
++    required this.scene,
+     required this.choices,
+-    required this.preferredIndex,
+   });
++
+   final String story;
+-  final List<String> choices;
+-  final int preferredIndex;
++  final String scene;
++  final List<SocialChoice> choices;
+ 
+   PresentedSocialScenario present({
+     required Random random,
+     required int choiceCount,
+-    required int preferredPosition,
+   }) {
+     final safeCount = choiceCount.clamp(2, choices.length).toInt();
+-    final preferred = choices[preferredIndex];
+-    final alternatives = <String>[
+-      for (var i = 0; i < choices.length; i++)
+-        if (i != preferredIndex) choices[i],
+-    ]..shuffle(random);
+-    final visible = <String>[preferred, ...alternatives.take(safeCount - 1)]
++    final supportive = choices.where((choice) => choice.supportive).toList()
++      ..shuffle(random);
++    final nonSupportive = choices.where((choice) => !choice.supportive).toList()
+       ..shuffle(random);
+-    final targetPosition = preferredPosition.clamp(0, safeCount - 1).toInt();
+-    visible.remove(preferred);
+-    visible.insert(targetPosition, preferred);
++
++    final visible = <SocialChoice>[];
++    if (safeCount == 2) {
++      visible.add(supportive.first);
++      visible.add(nonSupportive.first);
++    } else {
++      visible.addAll(supportive.take(safeCount - 1));
++      visible.add(nonSupportive.first);
++    }
++    visible.shuffle(random);
++
+     return PresentedSocialScenario(
+       story: story,
++      scene: scene,
+       choices: visible,
+-      preferredIndex: targetPosition,
+     );
+   }
+ 
+   static const examples = <SocialScenario>[
+     SocialScenario(
+-      story: 'Uma colega deixou cair os lápis e parece ocupada juntando tudo.',
++      scene: 'help',
++      story: 'Uma colega deixou cair os lápis e está juntando tudo.',
+       choices: [
+-        'Oferecer ajuda',
+-        'Continuar a própria atividade sem atrapalhar',
+-        'Rir dela',
++        SocialChoice(
++          text: 'Oferecer ajuda',
++          supportive: true,
++          feedback: 'Oferecer ajuda pode ser gentil, e ela ainda pode escolher aceitar ou não.',
++        ),
++        SocialChoice(
++          text: 'Continuar a atividade sem atrapalhar',
++          supportive: true,
++          feedback: 'Também é respeitoso dar espaço e não aumentar a confusão.',
++        ),
++        SocialChoice(
++          text: 'Rir e apontar',
++          supportive: false,
++          feedback: 'Rir pode constranger a colega. Podemos escolher uma resposta que preserve o respeito.',
++        ),
+       ],
+-      preferredIndex: 0,
+     ),
+     SocialScenario(
++      scene: 'space',
+       story: 'Um amigo diz que quer brincar sozinho por alguns minutos.',
+       choices: [
+-        'Respeitar o espaço',
+-        'Perguntar depois se ele quer companhia',
+-        'Insistir até ele aceitar',
++        SocialChoice(
++          text: 'Respeitar o espaço agora',
++          supportive: true,
++          feedback: 'Respeitar um pedido de espaço é uma forma clara de cuidar do limite do outro.',
++        ),
++        SocialChoice(
++          text: 'Perguntar mais tarde se quer companhia',
++          supportive: true,
++          feedback: 'Perguntar depois mantém a porta aberta sem pressionar.',
++        ),
++        SocialChoice(
++          text: 'Insistir até ele aceitar',
++          supportive: false,
++          feedback: 'Insistir depois de um pedido claro pode desrespeitar o limite dele.',
++        ),
+       ],
+-      preferredIndex: 0,
+     ),
+     SocialScenario(
++      scene: 'sharing',
+       story: 'Duas crianças querem usar o mesmo brinquedo.',
+       choices: [
+-        'Combinar turnos',
+-        'Procurar outra brincadeira enquanto espera',
+-        'Gritar mais alto',
++        SocialChoice(
++          text: 'Combinar turnos',
++          supportive: true,
++          feedback: 'Combinar turnos pode ajudar as duas crianças a terem acesso ao brinquedo.',
++        ),
++        SocialChoice(
++          text: 'Escolher outra brincadeira enquanto espera',
++          supportive: true,
++          feedback: 'Esperar fazendo outra coisa também pode resolver a situação sem conflito.',
++        ),
++        SocialChoice(
++          text: 'Puxar o brinquedo da mão do outro',
++          supportive: false,
++          feedback: 'Puxar o brinquedo pode machucar ou aumentar o conflito.',
++        ),
+       ],
+-      preferredIndex: 0,
+     ),
+     SocialScenario(
+-      story: 'Alguém não entendeu a regra de uma brincadeira.',
++      scene: 'explain',
++      story: 'Uma criança não entendeu a regra de uma brincadeira.',
+       choices: [
+-        'Explicar com calma',
+-        'Mostrar um exemplo',
+-        'Excluir da brincadeira',
++        SocialChoice(
++          text: 'Explicar com calma',
++          supportive: true,
++          feedback: 'Explicar com calma pode tornar a brincadeira mais acessível.',
++        ),
++        SocialChoice(
++          text: 'Mostrar um exemplo',
++          supportive: true,
++          feedback: 'Um exemplo pode ajudar quando apenas falar não é suficiente.',
++        ),
++        SocialChoice(
++          text:
