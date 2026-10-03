@@ -1,0 +1,153 @@
+mounted) return;
+-    setState(() {});
++    if (mounted) setState(() {});
+   }
+ 
+   Future<void> _record(String type, Map<String, Object?> payload) async {
+@@ -233,112 +328,251 @@ class _G05RegulationScreenState extends State<G05RegulationScreen> {
+   @override
+   Widget build(BuildContext context) {
+     final config = RegulationDifficultyConfig.forLevel(_state.level);
++
++    if (_done) {
++      return Scaffold(
++        body: SafeArea(
++          child: Center(
++            child: Padding(
++              padding: const EdgeInsets.all(28),
++              child: Column(
++                mainAxisSize: MainAxisSize.min,
++                children: [
++                  const Icon(Icons.landscape_rounded, size: 86, color: Color(0xFF27856E)),
++                  const SizedBox(height: 18),
++                  const Text(
++                    'Chegamos ao topo!',
++                    textAlign: TextAlign.center,
++                    style: TextStyle(fontSize: 30, fontWeight: FontWeight.w900),
++                  ),
++                  const SizedBox(height: 10),
++                  const Text(
++                    'Você praticou pausas guiadas que também podem ser lembradas fora do jogo.',
++                    textAlign: TextAlign.center,
++                    style: TextStyle(fontSize: 17, height: 1.4),
++                  ),
++                  const SizedBox(height: 24),
++                  FilledButton.icon(
++                    onPressed: () => Navigator.of(context).pop(),
++                    icon: const Icon(Icons.home_rounded),
++                    label: const Text('Voltar às missões'),
++                  ),
++                ],
++              ),
++            ),
++          ),
++        ),
++      );
++    }
++
++    if (_sessionId == null) {
++      return Scaffold(
++        appBar: AppBar(),
++        body: SafeArea(
++          child: ListView(
++            padding: const EdgeInsets.all(26),
++            children: [
++              const SizedBox(height: 20),
++              const Icon(Icons.landscape_rounded, size: 92, color: Color(0xFF27856E)),
++              const SizedBox(height: 18),
++              const Text(
++                'Montanha da Calma',
++                textAlign: TextAlign.center,
++                style: TextStyle(fontSize: 31, fontWeight: FontWeight.w900),
++              ),
++              const SizedBox(height: 12),
++              const Text(
++                'Em cada parada você escolhe uma pausa e pratica de verdade, passo a passo: respiração, relaxamento, observação ou uma frase gentil.',
++                textAlign: TextAlign.center,
++                style: TextStyle(fontSize: 17, height: 1.45),
++              ),
++              const SizedBox(height: 12),
++              Text(
++                'Não existe nota de emoção. O jogo registra apenas se a prática foi iniciada e concluída.',
++                textAlign: TextAlign.center,
++                style: TextStyle(
++                  fontSize: 13,
++                  height: 1.4,
++                  color: Theme.of(context).colorScheme.onSurfaceVariant,
++                ),
++              ),
++              const SizedBox(height: 26),
++              FilledButton.icon(
++                onPressed: _start,
++                icon: const Icon(Icons.play_arrow_rounded),
++                label: const Text('Começar subida'),
++              ),
++            ],
++          ),
++        ),
++      );
++    }
++
++    final exercise = _selectedExercise;
+     return Scaffold(
+-      appBar: AppBar(title: const Text('G05 • Montanha da Calma')),
++      appBar: AppBar(title: const Text('Montanha da Calma')),
+       body: SafeArea(
+         child: Padding(
+-          padding: const EdgeInsets.all(24),
+-          child: _done
+-              ? Center(
+-                  child: Column(
+-                    mainAxisSize: MainAxisSize.min,
+-                    children: [
+-                      const GameVisualStrip(
+-                        kind: GameVisualKind.regulation,
+-                        height: 122,
+-                      ),
+-                      const SizedBox(height: 16),
+-                      const Text(
+-                        'Montanha concluída!',
+-                        style: TextStyle(
+-                          fontSize: 28,
+-                          fontWeight: FontWeight.w900,
+-                        ),
+-                      ),
+-                      const SizedBox(height: 12),
+-                      const Text(
+-                        'Você praticou pausas e escolhas de autorregulação no jogo.',
+-                        textAlign: TextAlign.center,
+-                      ),
+-                      const SizedBox(height: 24),
+-                      FilledButton(
+-                        onPressed: () => Navigator.of(context).pop(),
+-                        child: const Text('Voltar'),
+-                      ),
+-                    ],
++          padding: const EdgeInsets.fromLTRB(20, 8, 20, 22),
++          child: Column(
++            crossAxisAlignment: CrossAxisAlignment.stretch,
++            children: [
++              LinearProgressIndicator(value: _round / _roundsPerSession),
++              const SizedBox(height: 12),
++              Text(
++                'Parada $_round de $_roundsPerSession',
++                style: const TextStyle(fontWeight: FontWeight.w900),
++              ),
++              const SizedBox(height: 14),
++              if (exercise != null)
++                Expanded(
++                  child: _GuidedExercise(
++                    exercise: exercise,
++                    stepIndex: _guideStep,
++                    message: _feedback,
+                   ),
+                 )
+-              : _sessionId == null
+-              ? Center(
+-                  child: Column(
+-                    mainAxisSize: MainAxisSize.min,
+-                    children: [
+-                      const GameVisualStrip(
+-                        kind: GameVisualKind.regulation,
+-                        height: 130,
+-
