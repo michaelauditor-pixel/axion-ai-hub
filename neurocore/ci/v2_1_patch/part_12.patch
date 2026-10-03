@@ -1,0 +1,177 @@
+;
+-      return;
+-    }
+-    if (completed % 2 == 0) {
+-      final perf = SocialPerformanceSnapshot(
+-        trials: completed,
+-        contextMatches: _matches,
+-        supportiveChoices: _supportive,
+-        omissions: _omissions,
+-        reactionTimesMs: _times,
+-      );
+-      final d = _engine.evaluate(state: _state, performance: perf);
+-      _state = d.nextState;
+-      await _record('difficulty_reviewed', {
+-        'trial': completed,
+-        'difficulty_after': _state.level,
+-        'reason': d.reasonCode,
+-      });
+-    }
+-    if (!mounted) return;
+-    setState(() {
+-      _index++;
+-      _started = DateTime.now();
+-      _feedback = 'Leia a situação e escolha com calma.';
+-    });
+-  }
+-
+-  Future<void> _finish() async {
+-    final perf = SocialPerformanceSnapshot(
+-      trials: 6,
+-      contextMatches: _matches,
+-      supportiveChoices: _supportive,
+-      omissions: _omissions,
+-      reactionTimesMs: _times,
+-    );
+-    final summary = <String, Object?>{
+-      'game_id': _gameId,
+-      'blocks_completed': 3,
+-      'final_difficulty': _state.level,
+-      'performance': perf.toJson(),
+-      'note': 'social_learning_not_masking_or_diagnosis',
+-    };
+-    final features = widget.services.neuroProfile.buildCompletedG06(
+-      profileId: widget.profileId,
+-      sessionId: _sessionId!,
+-      summary: summary,
+-    );
+-    await widget.services.repository.finalizeCompletedSession(
+-      sessionId: _sessionId!,
+-      summary: summary,
+-      features: features,
+-    );
+-    if (mounted) setState(() => _done = true);
+-  }
+-
+-  Future<void> _record(String type, Map<String, Object?> payload) async {
+-    if (_sessionId == null) return;
+-    await widget.services.telemetry.record(
+-      sessionId: _sessionId!,
+-      eventType: type,
+-      payload: payload,
+-    );
+-  }
+-
+-  @override
+-  Widget build(BuildContext context) {
+-    if (_done) {
+-      return Scaffold(
+-        appBar: AppBar(title: const Text('G06 • Mundo dos Amigos')),
+-        body: Center(
+-          child: Column(
+-            mainAxisSize: MainAxisSize.min,
+-            children: [
+-              const Icon(Icons.diversity_1_rounded, size: 76),
+-              const SizedBox(height: 16),
+-              const Text(
+-                'Missão concluída!',
+-                style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900),
+-              ),
+-              const SizedBox(height: 24),
+-              FilledButton(
+-                onPressed: () => Navigator.of(context).pop(),
+-                child: const Text('Voltar'),
+-              ),
+-            ],
+-          ),
+-        ),
+-      );
+-    }
+-    if (_sessionId == null) {
+-      return Scaffold(
+-        appBar: AppBar(title: const Text('G06 • Mundo dos Amigos')),
+-        body: Center(
+-          child: FilledButton.icon(
+-            onPressed: _start,
+-            icon: const Icon(Icons.play_arrow_rounded),
+-            label: const Text('Começar'),
+-          ),
+-        ),
+-      );
+-    }
+-    final scenario =
+-        SocialScenario.examples[_index % SocialScenario.examples.length];
+-    final choiceCount = _state.level <= 2 ? 2 : 3;
+-    return Scaffold(
+-      appBar: AppBar(title: const Text('G06 • Mundo dos Amigos')),
+-      body: SafeArea(
+-        child: Padding(
+-          padding: const EdgeInsets.all(24),
+-          child: Column(
+-            crossAxisAlignment: CrossAxisAlignment.stretch,
+-            children: [
+-              LinearProgressIndicator(value: (_index + 1) / 6),
+-              const SizedBox(height: 20),
+-              Text(
+-                'História ${_index + 1} de 6 • nível ${_state.level}',
+-                style: const TextStyle(fontWeight: FontWeight.w800),
+-              ),
+-              const SizedBox(height: 18),
+-              Container(
+-                padding: const EdgeInsets.all(24),
+-                decoration: BoxDecoration(
+-                  color: const Color(0xFFFFF2E8),
+-                  borderRadius: BorderRadius.circular(24),
+-                ),
+-                child: Column(
+-                  children: [
+-                    const Icon(Icons.people_alt_rounded, size: 58),
+-                    const SizedBox(height: 14),
+-                    Text(
+-                      scenario.story,
+-                      textAlign: TextAlign.center,
+-                      style: const TextStyle(
+-                        fontSize: 22,
+-                        fontWeight: FontWeight.w800,
+-                      ),
+-                    ),
+-                    const SizedBox(height: 12),
+-                    Text(_feedback, textAlign: TextAlign.center),
+-                  ],
+-                ),
+-              ),
+-              const SizedBox(height: 20),
+-              ...scenario.choices
+-                  .take(choiceCount)
+-                  .toList()
+-                  .asMap()
+-                  .entries
+-                  .map(
+-                    (e) => Padding(
+-                      padding: const EdgeInsets.only(bottom: 12),
+-                      child: FilledButton.tonal(
+-                        onPressed: () => _choose(e.key),
+-                        child: Padding(
+-                          padding: const EdgeInsets.all(14),
+-                          child: Text(e.value),
+-                        ),
+-                      ),
+-                    ),
+-                  ),
+-              const Spacer(),
+-              const Text(
+-                'O objetivo é praticar leitura de contexto, respeito e alternativas sociais; não existe meta de mascaramento ou normalização comportamental.',
+-                textAlign: TextAlign.center,
+-                style: TextStyle(fontSize: 12),
+-              ),
+-            ],
+-          ),
+-        ),
+-      ),
+-    );
+-  }
+-}
+diff --git a/lib/features/g06_social/social_scenario.dart b/lib/features/g06_social/social_scenario.dart
+index 0e96004..549f798 100644
+--- a/lib/features/g06_social/social_scenario.dart
++++ b/l
