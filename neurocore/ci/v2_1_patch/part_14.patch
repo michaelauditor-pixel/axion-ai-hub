@@ -1,0 +1,163 @@
+ 'Excluir da brincadeira',
++          supportive: false,
++          feedback: 'Excluir imediatamente não dá chance para a pessoa entender a regra.',
++        ),
+       ],
+-      preferredIndex: 0,
+     ),
+     SocialScenario(
++      scene: 'turn',
+       story: 'Uma criança está falando e você também quer contar uma coisa.',
+       choices: [
+-        'Esperar uma pausa e pedir a vez',
+-        'Guardar a ideia para contar depois',
+-        'Interromper gritando',
++        SocialChoice(
++          text: 'Esperar uma pausa e pedir a vez',
++          supportive: true,
++          feedback: 'Esperar uma pausa ajuda a organizar os turnos da conversa.',
++        ),
++        SocialChoice(
++          text: 'Guardar a ideia para contar depois',
++          supportive: true,
++          feedback: 'Contar depois também é uma alternativa respeitosa.',
++        ),
++        SocialChoice(
++          text: 'Interromper gritando',
++          supportive: false,
++          feedback: 'Gritar por cima pode dificultar que todos sejam ouvidos.',
++        ),
+       ],
+-      preferredIndex: 0,
+     ),
+     SocialScenario(
++      scene: 'different',
+       story: 'Seu colega escolheu uma brincadeira diferente da sua.',
+       choices: [
+-        'Conversar para encontrar uma opção boa para os dois',
+-        'Brincar separado por um tempo sem brigar',
+-        'Obrigar o colega a mudar',
++        SocialChoice(
++          text: 'Conversar para achar uma opção boa para os dois',
++          supportive: true,
++          feedback: 'Negociar pode ajudar a encontrar uma solução compartilhada.',
++        ),
++        SocialChoice(
++          text: 'Brincar separado por um tempo sem brigar',
++          supportive: true,
++          feedback: 'Nem sempre é preciso fazer a mesma coisa; brincar separado também pode ser respeitoso.',
++        ),
++        SocialChoice(
++          text: 'Obrigar o colega a mudar',
++          supportive: false,
++          feedback: 'Obrigar tira do outro a possibilidade de escolher.',
++        ),
+       ],
+-      preferredIndex: 0,
+     ),
+     SocialScenario(
++      scene: 'support',
+       story: 'Um amigo parece chateado e não quer explicar o motivo.',
+       choices: [
+-        'Dizer que você está disponível se ele quiser falar',
+-        'Dar espaço com respeito',
+-        'Ficar perguntando sem parar',
++        SocialChoice(
++          text: 'Dizer que estou disponível se ele quiser falar',
++          supportive: true,
++          feedback: 'Oferecer disponibilidade sem pressionar pode ser acolhedor.',
++        ),
++        SocialChoice(
++          text: 'Dar espaço com respeito',
++          supportive: true,
++          feedback: 'Dar espaço também pode ser uma forma de respeitar o momento da pessoa.',
++        ),
++        SocialChoice(
++          text: 'Perguntar sem parar até responder',
++          supportive: false,
++          feedback: 'Perguntar repetidamente pode aumentar a pressão quando a pessoa já disse que não quer falar.',
++        ),
+       ],
+-      preferredIndex: 0,
+     ),
+     SocialScenario(
+-      story:
+-          'Você percebe que entendeu uma fala de um jeito diferente do colega.',
++      scene: 'clarify',
++      story: 'Você percebe que entendeu uma fala de um jeito diferente do colega.',
+       choices: [
+-        'Perguntar com calma o que ele quis dizer',
+-        'Explicar como você entendeu',
+-        'Decidir que ele fez de propósito',
++        SocialChoice(
++          text: 'Perguntar com calma o que ele quis dizer',
++          supportive: true,
++          feedback: 'Pedir esclarecimento reduz a chance de agir por uma suposição.',
++        ),
++        SocialChoice(
++          text: 'Explicar como eu entendi e ouvir a resposta',
++          supportive: true,
++          feedback: 'Explicar sua interpretação e ouvir o outro pode ajudar os dois lados.',
++        ),
++        SocialChoice(
++          text: 'Decidir que ele fez de propósito sem perguntar',
++          supportive: false,
++          feedback: 'Concluir a intenção sem confirmar pode aumentar um mal-entendido.',
++        ),
+       ],
+-      preferredIndex: 0,
+     ),
+   ];
+ }
+diff --git a/lib/features/home/home_screen.dart b/lib/features/home/home_screen.dart
+index fbbd9b7..ca5e364 100644
+--- a/lib/features/home/home_screen.dart
++++ b/lib/features/home/home_screen.dart
+@@ -1,6 +1,7 @@
+ import 'package:flutter/material.dart';
+ 
+ import '../../core/bootstrap/app_services.dart';
++import '../../core/product/product_info.dart';
+ import '../../core/profile/profile_models.dart';
+ import '../g01_focus/g01_screen.dart';
+ import '../g02_inhibition/g02_screen.dart';
+@@ -23,7 +24,6 @@ class HomeScreen extends StatefulWidget {
+ class _HomeScreenState extends State<HomeScreen> {
+   List<ChildProfile> _profiles = const [];
+   String? _activeProfileId;
+-  int? _completedSessions;
+   bool _loading = true;
+ 
+   ChildProfile? get _activeProfile {
+@@ -40,67 +40,48 @@ class _HomeScreenState extends State<HomeScreen> {
+   }
+ 
+   Future<void> _bootstrap() async {
+-    final defaultProfileId = await widget.services.repository
+-        .ensureDefaultProfile();
++    final defaultProfileId = await widget.services.repository.ensureDefaultProfile();
+     _activeProfileId ??= defaultProfileId;
+     await _refresh();
+   }
+ 
+   Future<void> _refresh() async {
+     final profiles = await widget.services.repository.listProfiles();
+-    if (profiles.isNotEmpty &&
+-        !profiles.any((p) => p.profileId == _activeProfileId)) {
++    if (profiles.isNotEmpty && !profiles.any((p) => p.profileId == _activeProfileId)) {
+       _activeProfileId = profiles.first.profileId;
+     }
+-    final count = _activeProfileId == null
+-        ? 0
+-        : await widget.services.repository.completedSessionCount(
+-            profileId: _activeProfileId,
+-          );
+     if (!mounted) return;
+     setState(() {
+       _profiles = profiles;
+-      _completedSessions = count;
+       _loading = false;
+     });
+   }
+ 
+   Futu
