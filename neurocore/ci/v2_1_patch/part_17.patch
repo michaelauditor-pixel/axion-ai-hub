@@ -1,0 +1,194 @@
+e: 12, fontWeight: FontWeight.w700),
+                   ),
+                 ],
+               ),
+             ),
+-            const SizedBox(height: 18),
+-            const Text(
+-              'NeuroCore V0.6 é um protótipo neuroeducacional. As métricas não constituem diagnóstico médico, psicológico ou neuropsicológico.',
+-              style: TextStyle(fontSize: 12, height: 1.4),
+-            ),
+           ],
+         ),
+       ),
+@@ -316,72 +193,184 @@ class _HomeScreenState extends State<HomeScreen> {
+   }
+ }
+ 
+-class _GameCard extends StatelessWidget {
+-  const _GameCard({
+-    required this.background,
+-    required this.iconBackground,
+-    required this.icon,
++class _Header extends StatelessWidget {
++  const _Header({
++    required this.profileName,
++    required this.onAccessibility,
++    required this.onParentArea,
++  });
++
++  final String profileName;
++  final VoidCallback onAccessibility;
++  final VoidCallback onParentArea;
++
++  @override
++  Widget build(BuildContext context) {
++    return Container(
++      padding: const EdgeInsets.all(16),
++      decoration: BoxDecoration(
++        gradient: LinearGradient(
++          colors: [
++            Theme.of(context).colorScheme.primaryContainer,
++            Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: .72),
++          ],
++        ),
++        borderRadius: BorderRadius.circular(26),
++      ),
++      child: Row(
++        children: [
++          Container(
++            width: 54,
++            height: 54,
++            decoration: BoxDecoration(
++              color: Colors.white.withValues(alpha: .78),
++              borderRadius: BorderRadius.circular(18),
++            ),
++            child: const Icon(Icons.psychology_alt_rounded, size: 32),
++          ),
++          const SizedBox(width: 12),
++          Expanded(
++            child: Column(
++              crossAxisAlignment: CrossAxisAlignment.start,
++              children: [
++                const Text(
++                  'NeuroCore',
++                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900),
++                ),
++                const SizedBox(height: 2),
++                Text(
++                  'Olá, $profileName!',
++                  maxLines: 1,
++                  overflow: TextOverflow.ellipsis,
++                  style: const TextStyle(fontWeight: FontWeight.w700),
++                ),
++              ],
++            ),
++          ),
++          IconButton.filledTonal(
++            tooltip: 'Conforto e acessibilidade',
++            onPressed: onAccessibility,
++            icon: const Icon(Icons.accessibility_new_rounded),
++          ),
++          const SizedBox(width: 4),
++          IconButton.filledTonal(
++            tooltip: 'Área dos responsáveis',
++            onPressed: onParentArea,
++            icon: const Icon(Icons.supervisor_account_outlined),
++          ),
++        ],
++      ),
++    );
++  }
++}
++
++class _MissionData {
++  const _MissionData({
+     required this.title,
+-    required this.description,
+-    required this.buttonLabel,
+-    required this.onTap,
++    required this.subtitle,
++    required this.icon,
++    required this.background,
++    required this.accent,
+   });
+ 
+-  final Color background;
+-  final Color iconBackground;
+-  final IconData icon;
+   final String title;
+-  final String description;
+-  final String buttonLabel;
++  final String subtitle;
++  final IconData icon;
++  final Color background;
++  final Color accent;
++}
++
++const _missions = <_MissionData>[
++  _MissionData(
++    title: 'Missão Foco',
++    subtitle: 'Ache o símbolo-alvo e ignore as distrações.',
++    icon: Icons.center_focus_strong_rounded,
++    background: Color(0xFFEAF0FF),
++    accent: Color(0xFF4E67D7),
++  ),
++  _MissionData(
++    title: 'Pare, Pense, Vá!',
++    subtitle: 'Toque no VÁ e segure a mão quando aparecer PARE.',
++    icon: Icons.traffic_rounded,
++    background: Color(0xFFE9F8EE),
++    accent: Color(0xFF2F8B50),
++  ),
++  _MissionData(
++    title: 'Memória Mágica',
++    subtitle: 'Veja, memorize e repita a sequência.',
++    icon: Icons.auto_awesome_rounded,
++    background: Color(0xFFFFF4DD),
++    accent: Color(0xFFD38A21),
++  ),
++  _MissionData(
++    title: 'Troca-Troca',
++    subtitle: 'Descubra se a regra agora é cor ou forma.',
++    icon: Icons.swap_horiz_rounded,
++    background: Color(0xFFF2EAFE),
++    accent: Color(0xFF7B52B9),
++  ),
++  _MissionData(
++    title: 'Montanha da Calma',
++    subtitle: 'Pratique uma pausa guiada com respiração e corpo.',
++    icon: Icons.landscape_rounded,
++    background: Color(0xFFE8F7F2),
++    accent: Color(0xFF27856E),
++  ),
++  _MissionData(
++    title: 'Mundo dos Amigos',
++    subtitle: 'Explore maneiras respeitosas de resolver situações.',
++    icon: Icons.diversity_1_rounded,
++    background: Color(0xFFFFF0E6),
++    accent: Color(0xFFD46F35),
++  ),
++];
++
++class _MissionCard extends StatelessWidget {
++  const _MissionCard({required this.mission, required this.onTap});
++
++  final _MissionData mission;
+   final VoidCallback onTap;
+ 
+   @override
+   Widget build(BuildContext context) {
+     return Material(
+-      color: background,
+-      borderRadius: BorderRadius.circular(28),
++      color: mission.background,
++      borderRadius: BorderRadius.circular(24),
+       child: InkWell(
+         onTap: onTap,
+-        borderRadius: BorderRadius.circular(28),
++        borderRadius: BorderRadius.circular(24),
+         child: Padding(
+-          padding: const EdgeInsets.all(22),
+-          child: Column(
+-            crossAxisAlignment: CrossAxisAlignment.start,
++          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
++          child: Row(
+             children: [
+-              Row(
+-                children: [
+-                  Container(
+-                    width: 64,
+-                    height: 64,
+-                    decoration: BoxDecoration(
+-                      color: iconBackground,
+-                      borderRadius: BorderRadius.circul
