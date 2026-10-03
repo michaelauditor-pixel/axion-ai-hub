@@ -1,0 +1,176 @@
+xFF7B52B9),
++    Color(0xFF2D86A6),
++  ];
++  return colors[index.clamp(0, colors.length - 1).toInt()];
++}
++
+ class _MemoryPauseView extends StatelessWidget {
+   const _MemoryPauseView();
+ 
+diff --git a/lib/features/g04_flexibility/g04_screen.dart b/lib/features/g04_flexibility/g04_screen.dart
+index fa5ade3..2fae158 100644
+--- a/lib/features/g04_flexibility/g04_screen.dart
++++ b/lib/features/g04_flexibility/g04_screen.dart
+@@ -502,9 +502,19 @@ class _RuleBanner extends StatelessWidget {
+             : Theme.of(context).colorScheme.primaryContainer,
+         borderRadius: BorderRadius.circular(24),
+       ),
+-      child: Text(
+-        'REGRA: ${rule == FlexibilityRule.color ? 'COR' : 'FORMA'}',
+-        style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
++      child: Column(
++        mainAxisSize: MainAxisSize.min,
++        children: [
++          if (changed)
++            const Text(
++              'MUDOU!',
++              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1.4),
++            ),
++          Text(
++            'REGRA: ${rule == FlexibilityRule.color ? 'COR' : 'FORMA'}',
++            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
++          ),
++        ],
+       ),
+     );
+   }
+diff --git a/lib/features/g05_regulation/g05_screen.dart b/lib/features/g05_regulation/g05_screen.dart
+index edfaf62..6a53916 100644
+--- a/lib/features/g05_regulation/g05_screen.dart
++++ b/lib/features/g05_regulation/g05_screen.dart
+@@ -6,7 +6,6 @@ import '../../core/adaptive/adaptive_engine.dart';
+ import '../../core/adaptive/regulation_adaptive_engine.dart';
+ import '../../core/adaptive/regulation_performance_snapshot.dart';
+ import '../../core/bootstrap/app_services.dart';
+-import '../../widgets/game_visual_strip.dart';
+ import 'regulation_difficulty_config.dart';
+ 
+ class G05RegulationScreen extends StatefulWidget {
+@@ -15,6 +14,7 @@ class G05RegulationScreen extends StatefulWidget {
+     required this.profileId,
+     super.key,
+   });
++
+   final AppServices services;
+   final String profileId;
+ 
+@@ -22,29 +22,100 @@ class G05RegulationScreen extends StatefulWidget {
+   State<G05RegulationScreen> createState() => _G05RegulationScreenState();
+ }
+ 
++class _RegulationStep {
++  const _RegulationStep(this.text, this.seconds);
++  final String text;
++  final int seconds;
++}
++
++class _RegulationExercise {
++  const _RegulationExercise({
++    required this.id,
++    required this.title,
++    required this.subtitle,
++    required this.icon,
++    required this.steps,
++  });
++
++  final String id;
++  final String title;
++  final String subtitle;
++  final IconData icon;
++  final List<_RegulationStep> steps;
++}
++
++const _exercises = <_RegulationExercise>[
++  _RegulationExercise(
++    id: 'flor_vela',
++    title: 'Flor e vela',
++    subtitle: 'Puxe o ar devagar e solte ainda mais devagar.',
++    icon: Icons.local_florist_rounded,
++    steps: [
++      _RegulationStep('Cheire a flor: puxe o ar pelo nariz.', 3),
++      _RegulationStep('Assopre a vela: solte o ar devagar.', 4),
++      _RegulationStep('Mais uma vez: puxe o ar com calma.', 3),
++      _RegulationStep('Agora solte o ar bem devagar.', 4),
++    ],
++  ),
++  _RegulationExercise(
++    id: 'maos_leves',
++    title: 'Mãos fortes, mãos leves',
++    subtitle: 'Aperte e solte as mãos percebendo a diferença.',
++    icon: Icons.back_hand_rounded,
++    steps: [
++      _RegulationStep('Feche as mãos com firmeza, sem machucar.', 3),
++      _RegulationStep('Abra as mãos e deixe os dedos relaxarem.', 4),
++      _RegulationStep('Feche novamente por um instante.', 3),
++      _RegulationStep('Solte e deixe as mãos bem leves.', 4),
++    ],
++  ),
++  _RegulationExercise(
++    id: 'pausa_observa',
++    title: 'Pausa e observa',
++    subtitle: 'Pare por alguns segundos e perceba o que está ao redor.',
++    icon: Icons.visibility_rounded,
++    steps: [
++      _RegulationStep('Pare o corpo por um instante.', 3),
++      _RegulationStep('Olhe ao redor e encontre 3 coisas que você vê.', 5),
++      _RegulationStep('Perceba 2 sons perto de você.', 5),
++      _RegulationStep('Escolha com calma o que fazer depois.', 3),
++    ],
++  ),
++  _RegulationExercise(
++    id: 'frase_gentil',
++    title: 'Frase gentil',
++    subtitle: 'Pratique uma frase curta para ganhar tempo e tentar de novo.',
++    icon: Icons.chat_bubble_rounded,
++    steps: [
++      _RegulationStep('Diga para você: “Posso ir devagar.”', 4),
++      _RegulationStep('Respire uma vez sem pressa.', 4),
++      _RegulationStep('Diga: “Posso tentar de outro jeito.”', 4),
++    ],
++  ),
++];
++
+ class _G05RegulationScreenState extends State<G05RegulationScreen> {
+-  static const _gameId = 'G05_montanha_calma';
+-  static const _strategies = <String>[
+-    'Respirar devagar',
+-    'Pausar e observar',
+-    'Alongar as mãos',
+-    'Escolher um pensamento gentil',
+-  ];
+-
+-  final _engine = const RegulationAdaptiveEngine();
++  static const String _gameId = 'G05_montanha_calma';
++  static const int _roundsPerSession = 6;
++
++  final RegulationAdaptiveEngine _engine = const RegulationAdaptiveEngine();
+   AdaptiveState _state = AdaptiveState.initial();
++
+   String? _sessionId;
+   Timer? _roundTimer;
+   int _round = 0;
+   int _completed = 0;
+   int _premature = 0;
+   int _omissions = 0;
+-  final List<int> _times = [];
++  final List<int> _selectionTimes = [];
+   DateTime? _started;
++
+   bool _done = false;
+   bool _busy = false;
+   bool _closing = false;
+-  String _feedback = 'Suba a montanha no seu ritmo.';
++  _RegulationExercise? _selectedExercise;
++  int _guideStep = 0;
++  String _feedback = 'Escolha uma pausa curta para praticar.';
+ 
+   @override
+   void dispose() {
+@@ -55,11 +126,11 @@ class _G05RegulationScreenState extends State<G05RegulationScreen> {
+     super.dispose();
+   }
+ 
+-  List<String> _visibleStrategies(RegulationDifficultyConfig config) {
+-    final start = (_round - 1).clamp(0, 1000) % _strategies.length;
+-    final rotated = <String>[
+-      for (va
