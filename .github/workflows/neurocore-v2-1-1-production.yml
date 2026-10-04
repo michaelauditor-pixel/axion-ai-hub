@@ -1,0 +1,299 @@
+name: NeuroCore V2.1.1 Definitive Production
+
+on:
+  push:
+    branches: [neurocore-v2-1-1-production]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  production_release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Download validated V2.1 source baseline
+        uses: actions/download-artifact@v4
+        with:
+          name: neurocore-v2.1-finalized-android
+          path: /tmp/input
+          github-token: ${{ github.token }}
+          repository: michaelauditor-pixel/axion-ai-hub
+          run-id: 37198101021
+
+      - name: Restore validated source and set V2.1.1 final identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/neurocore
+          mkdir -p /tmp/neurocore
+          tar -xzf /tmp/input/neurocore_v2_1_source.tar.gz -C /tmp/neurocore
+          cd /tmp/neurocore
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path('pubspec.yaml')
+          s = p.read_text()
+          s = s.replace('version: 2.1.0+21', 'version: 2.1.1+22')
+          s = s.replace('NeuroCore V2.1', 'NeuroCore V2.1.1')
+          p.write_text(s)
+
+          info = Path('lib/core/product/product_info.dart')
+          s = info.read_text()
+          s = s.replace("versionLabel = 'V2.1'", "versionLabel = 'V2.1.1 FINAL'")
+          info.write_text(s)
+
+          gradle = Path('android/app/build.gradle.kts')
+          s = gradle.read_text()
+          marker = 'android {\n'
+          prefix = '''val keystoreProperties = java.util.Properties()\nval keystorePropertiesFile = rootProject.file("key.properties")\nif (keystorePropertiesFile.exists()) {\n    keystoreProperties.load(java.io.FileInputStream(keystorePropertiesFile))\n}\n\n'''
+          if 'val keystoreProperties = java.util.Properties()' not in s:
+              s = s.replace(marker, prefix + marker, 1)
+
+          old = '''    buildTypes {\n        release {\n            // TODO: Add your own signing config for the release build.\n            // Signing with the debug keys for now, so `flutter run --release` works.\n            signingConfig = signingConfigs.getByName("debug")\n        }\n    }'''
+          new = '''    signingConfigs {\n        create("release") {\n            keyAlias = keystoreProperties["keyAlias"] as String\n            keyPassword = keystoreProperties["keyPassword"] as String\n            storeFile = file(keystoreProperties["storeFile"] as String)\n            storePassword = keystoreProperties["storePassword"] as String\n        }\n    }\n\n    buildTypes {\n        release {\n            signingConfig = signingConfigs.getByName("release")\n        }\n    }'''
+          if old not in s:
+              raise SystemExit('expected debug release signing block not found')
+          gradle.write_text(s.replace(old, new, 1))
+          PY
+
+          grep -q '^version: 2.1.1+22' pubspec.yaml
+          grep -q "versionLabel = 'V2.1.1 FINAL'" lib/core/product/product_info.dart
+          grep -q 'signingConfigs.getByName("release")' android/app/build.gradle.kts
+          ! grep -q 'signingConfigs.getByName("debug")' android/app/build.gradle.kts
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.0'
+          channel: stable
+          cache: true
+
+      - name: Generate canonical NeuroCore production signing identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/signing
+          STORE_PASS="$(openssl rand -hex 32)"
+          ALIAS='neurocore-production'
+          KEYSTORE='/tmp/signing/neurocore-production.p12'
+
+          keytool -genkeypair \
+            -keystore "$KEYSTORE" \
+            -storetype PKCS12 \
+            -alias "$ALIAS" \
+            -keyalg RSA \
+            -keysize 4096 \
+            -sigalg SHA256withRSA \
+            -validity 10000 \
+            -dname 'CN=NeuroCore Production,O=Jogos App,C=BR' \
+            -storepass "$STORE_PASS" \
+            -keypass "$STORE_PASS" >/dev/null
+
+          cat > /tmp/neurocore/android/key.properties <<EOF
+          storePassword=$STORE_PASS
+          keyPassword=$STORE_PASS
+          keyAlias=$ALIAS
+          storeFile=$KEYSTORE
+          EOF
+
+          keytool -exportcert -rfc \
+            -keystore "$KEYSTORE" \
+            -storepass "$STORE_PASS" \
+            -alias "$ALIAS" \
+            -file /tmp/signing/neurocore-production-signing-cert.pem >/dev/null
+
+          mkdir -p /tmp/signing/backup
+          cp "$KEYSTORE" /tmp/signing/backup/neurocore-production.p12
+          cp /tmp/signing/neurocore-production-signing-cert.pem /tmp/signing/backup/neurocore-production-signing-cert.pem
+          cat > /tmp/signing/backup/SIGNING_CREDENTIALS.txt <<EOF
+          NeuroCore production signing identity
+          Canonical from app version: 2.1.1+22
+          Alias: $ALIAS
+          Store password: $STORE_PASS
+          Key password: $STORE_PASS
+          Keystore type: PKCS12
+          IMPORTANT: preserve this identity for every future Android update.
+          EOF
+          tar -czf /tmp/signing/neurocore-production-signing-backup.tar.gz -C /tmp/signing/backup .
+
+          openssl cms -encrypt -binary -aes256 \
+            -in /tmp/signing/neurocore-production-signing-backup.tar.gz \
+            -out /tmp/signing/neurocore-production-signing-backup.p7m \
+            -outform DER \
+            "$GITHUB_WORKSPACE/neurocore/production/recovery_cert.pem"
+
+          test -s /tmp/signing/neurocore-production-signing-backup.p7m
+          rm -rf /tmp/signing/backup /tmp/signing/neurocore-production-signing-backup.tar.gz
+
+      - name: Flutter dependency resolution
+        working-directory: /tmp/neurocore
+        run: flutter pub get
+
+      - name: Acceptance invariants
+        working-directory: /tmp/neurocore
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q '^version: 2.1.1+22' pubspec.yaml
+          grep -q 'loadStartingDifficulty' lib/core/data/neuro_repository.dart
+          test "$(grep -R -l 'with WidgetsBindingObserver' lib/features/g0*/g*_screen.dart | wc -l)" -eq 6
+          test "$(grep -R -l 'loadStartingDifficulty(' lib/features/g0*/g*_screen.dart | wc -l)" -eq 6
+          grep -q 'media.textScaler.scale(1.0)' lib/app.dart
+          grep -q "'completion_confirmed_after_guidance': true" lib/features/g05_regulation/g05_screen.dart
+          grep -q "'reason': 'explicit_skip'" lib/features/g06_social/g06_screen.dart
+          ! grep -q '_responseWindowMs' lib/features/g06_social/g06_screen.dart
+          ! grep -q 'Timer(' lib/features/g06_social/g06_screen.dart
+          ! grep -R -q 'NeuroCore V0.6' lib
+          ! grep -R -q 'V1.7 FINAL RC2' lib
+          ! grep -E -q 'google_mobile_ads|firebase_analytics|facebook_app_events|amplitude_flutter|mixpanel_flutter|geolocator|app_tracking_transparency' pubspec.yaml
+
+      - name: Flutter analyze strict
+        working-directory: /tmp/neurocore
+        run: flutter analyze
+
+      - name: Flutter regression tests
+        working-directory: /tmp/neurocore
+        run: flutter test --reporter expanded
+
+      - name: Build and verify production-signed Android APK
+        working-directory: /tmp/neurocore
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter build apk --release 2>&1 | tee /tmp/build.log
+          ! grep -q 'plugins that apply Kotlin Gradle Plugin' /tmp/build.log
+
+          APK=build/app/outputs/flutter-apk/app-release.apk
+          test -s "$APK"
+          AAPT=$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -1)
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)
+          ZIPALIGN=$(find "$ANDROID_HOME/build-tools" -type f -name zipalign | sort -V | tail -1)
+
+          "$AAPT" dump badging "$APK" | tee /tmp/apk_badging.txt
+          grep -q "package: name='br.com.neurocore.neurocore_app' versionCode='22' versionName='2.1.1'" /tmp/apk_badging.txt
+          grep -q "application-label:'NeuroCore'" /tmp/apk_badging.txt
+          ! grep -q 'application-debuggable' /tmp/apk_badging.txt
+
+          "$ZIPALIGN" -c -v 4 "$APK" > /tmp/zipalign.txt
+          "$APKSIGNER" verify --verbose --print-certs "$APK" | tee /tmp/apksigner.txt
+          grep -q 'Verified using v2 scheme (APK Signature Scheme v2): true' /tmp/apksigner.txt
+          grep -q 'CN=NeuroCore Production' /tmp/apksigner.txt
+          ! grep -q 'Android Debug' /tmp/apksigner.txt
+
+          cp "$APK" ./NeuroCore_V2.1.1_PRODUCTION_DEFINITIVE.apk
+          sha256sum ./NeuroCore_V2.1.1_PRODUCTION_DEFINITIVE.apk | tee /tmp/apk_sha256.txt
+
+      - name: Android emulator installation and launch smoke test
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          script: |
+            set -euo pipefail
+            APK=/tmp/neurocore/NeuroCore_V2.1.1_PRODUCTION_DEFINITIVE.apk
+            adb install -r "$APK"
+            adb logcat -c
+            adb shell am start -W -n br.com.neurocore.neurocore_app/.MainActivity | tee /tmp/am_start.txt
+            sleep 7
+            PID="$(adb shell pidof br.com.neurocore.neurocore_app | tr -d '\r')"
+            test -n "$PID"
+            adb shell dumpsys activity activities | grep -q 'br.com.neurocore.neurocore_app'
+            adb logcat -d -b crash | tee /tmp/android_crash_buffer.txt
+            test ! -s /tmp/android_crash_buffer.txt
+            adb shell am force-stop br.com.neurocore.neurocore_app
+
+      - name: Create definitive production evidence package
+        working-directory: /tmp/neurocore
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=NeuroCore_V2.1.1_PRODUCTION_DEFINITIVE.apk
+          APK_SHA=$(sha256sum "$APK" | awk '{print $1}')
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)
+          CERT_SHA=$("$APKSIGNER" verify --print-certs "$APK" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -1)
+          if [ -z "$CERT_SHA" ]; then
+            CERT_SHA=$("$APKSIGNER" verify --print-certs "$APK" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -1)
+          fi
+
+          rm -f android/key.properties
+          tar -czf neurocore_v2_1_1_production_source.tar.gz pubspec.yaml pubspec.lock analysis_options.yaml lib test android
+          SOURCE_SHA=$(sha256sum neurocore_v2_1_1_production_source.tar.gz | awk '{print $1}')
+
+          cp /tmp/apk_badging.txt ./neurocore_v2_1_1_apk_badging.txt
+          cp /tmp/apksigner.txt ./neurocore_v2_1_1_apksigner.txt
+          cp /tmp/zipalign.txt ./neurocore_v2_1_1_zipalign.txt
+          cp /tmp/am_start.txt ./neurocore_v2_1_1_emulator_launch.txt
+          cp /tmp/signing/neurocore-production-signing-cert.pem ./neurocore_production_signing_cert.pem
+          cp /tmp/signing/neurocore-production-signing-backup.p7m ./neurocore_production_signing_backup_encrypted.p7m
+
+          python3 - "$APK_SHA" "$SOURCE_SHA" "$CERT_SHA" <<'PY'
+          import json, sys
+          data = {
+            'version': '2.1.1+22',
+            'release_status': 'PRODUCTION_DEFINITIVE',
+            'package_id': 'br.com.neurocore.neurocore_app',
+            'application_label': 'NeuroCore',
+            'build_type': 'release',
+            'debuggable': False,
+            'flutter_analyze': 'pass',
+            'flutter_tests': 'pass',
+            'production_signing': True,
+            'signing_identity': 'CN=NeuroCore Production,O=Jogos App,C=BR',
+            'signing_certificate_sha256': sys.argv[3],
+            'signature_baseline': 'canonical_from_2.1.1+22_forward',
+            'encrypted_signing_backup': True,
+            'zipalign': 'pass',
+            'apk_signature_v2': 'pass',
+            'android_emulator_api35_install': 'pass',
+            'android_emulator_api35_launch': 'pass',
+            'physical_device_validation': 'not_executed_in_ci',
+            'recommended_age': '6-11',
+            'current_language': 'pt-BR',
+            'clinical_positioning': 'neuroeducational_non_diagnostic_non_treatment',
+            'persistent_progression': True,
+            'practiced_and_next_difficulty_separated': True,
+            'lifecycle_interruption': 'abandon_session_and_return_home_on_resume',
+            'system_text_scale': 'preserved',
+            'g03_max_span': 'largest_exactly_reproduced_sequence',
+            'g05': 'guided_completion_after_exercise',
+            'g06': 'multiple_supportive_responses_no_reading_deadline',
+            'domain_min_sessions': 3,
+            'domain_comparison': 'same_game_same_recent_difficulty_usable_sessions',
+            'global_cross_game_score': 'disabled',
+            'apk_sha256': sys.argv[1],
+            'source_sha256': sys.argv[2],
+          }
+          with open('NeuroCore_V2.1.1_PRODUCTION_EVIDENCE.json', 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+            f.write('\n')
+          PY
+
+          cat NeuroCore_V2.1.1_PRODUCTION_EVIDENCE.json
+
+      - name: Upload definitive NeuroCore production release
+        uses: actions/upload-artifact@v4
+        with:
+          name: neurocore-v2.1.1-production-definitive
+          path: |
+            /tmp/neurocore/NeuroCore_V2.1.1_PRODUCTION_DEFINITIVE.apk
+            /tmp/neurocore/NeuroCore_V2.1.1_PRODUCTION_EVIDENCE.json
+            /tmp/neurocore/neurocore_v2_1_1_apk_badging.txt
+            /tmp/neurocore/neurocore_v2_1_1_apksigner.txt
+            /tmp/neurocore/neurocore_v2_1_1_zipalign.txt
+            /tmp/neurocore/neurocore_v2_1_1_emulator_launch.txt
+            /tmp/neurocore/neurocore_v2_1_1_production_source.tar.gz
+            /tmp/neurocore/neurocore_production_signing_cert.pem
+            /tmp/neurocore/neurocore_production_signing_backup_encrypted.p7m
+            /tmp/neurocore/pubspec.lock
+          if-no-files-found: error
+          retention-days: 30
