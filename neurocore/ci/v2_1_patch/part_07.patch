@@ -1,0 +1,279 @@
+-      borderRadius: BorderRadius.circular(28),
++      color: data.background,
++      borderRadius: BorderRadius.circular(24),
+       child: InkWell(
+-        onTap: onTap,
+-        borderRadius: BorderRadius.circular(28),
++        onTap: data.onTap,
++        borderRadius: BorderRadius.circular(24),
+         child: Padding(
+-          padding: const EdgeInsets.all(22),
+-          child: Column(
+-            crossAxisAlignment: CrossAxisAlignment.start,
++          padding: const EdgeInsets.all(16),
++          child: Row(
+             children: [
+-              Row(
+-                children: [
+-                  Container(
+-                    width: 64,
+-                    height: 64,
+-                    decoration: BoxDecoration(
+-                      color: iconBackground,
+-                      borderRadius: BorderRadius.circular(22),
+-                    ),
+-                    child: Icon(icon, color: Colors.white, size: 38),
+-                  ),
+-                  const Spacer(),
+-                  const Icon(Icons.arrow_forward_rounded),
+-                ],
++              Container(
++                width: 62,
++                height: 62,
++                decoration: BoxDecoration(color: data.foreground, borderRadius: BorderRadius.circular(20)),
++                child: Icon(data.icon, color: Colors.white, size: 34),
+               ),
+-              const SizedBox(height: 20),
+-              Text(
+-                title,
+-                style: const TextStyle(
+-                  fontSize: 22,
+-                  fontWeight: FontWeight.w900,
++              const SizedBox(width: 14),
++              Expanded(
++                child: Column(
++                  crossAxisAlignment: CrossAxisAlignment.start,
++                  children: [
++                    Text(data.title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
++                    const SizedBox(height: 4),
++                    Text(data.subtitle, style: const TextStyle(fontSize: 14, height: 1.35)),
++                  ],
+                 ),
+               ),
+-              const SizedBox(height: 7),
+-              Text(
+-                description,
+-                style: const TextStyle(fontSize: 15, height: 1.45),
+-              ),
+-              const SizedBox(height: 16),
+-              FilledButton.icon(
+-                onPressed: onTap,
+-                icon: const Icon(Icons.play_arrow_rounded),
+-                label: Text(buttonLabel),
++              const SizedBox(width: 8),
++              Container(
++                width: 44,
++                height: 44,
++                decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
++                child: Icon(Icons.play_arrow_rounded, color: data.foreground, size: 28),
+               ),
+             ],
+           ),
+diff -ruN '--exclude=*.orig' '--exclude=assets' nc_v19_base/lib/features/onboarding/guardian_notice_screen.dart nc_v21_work/src/lib/features/onboarding/guardian_notice_screen.dart
+--- nc_v19_base/lib/features/onboarding/guardian_notice_screen.dart	2026-08-21 16:51:41.000000000 +0000
++++ nc_v21_work/src/lib/features/onboarding/guardian_notice_screen.dart	2026-10-04 00:57:59.137214963 +0000
+@@ -90,7 +90,7 @@
+             const _NoticeItem(
+               icon: Icons.child_care_rounded,
+               text:
+-                  'O responsável deve supervisionar o uso e pode exportar ou excluir os dados locais na área protegida.',
++                  'Faixa principal recomendada: 6 a 11 anos. O responsável deve supervisionar o uso e pode exportar ou excluir os dados locais na área protegida.',
+             ),
+             const SizedBox(height: 18),
+             CheckboxListTile(
+diff -ruN '--exclude=*.orig' '--exclude=assets' nc_v19_base/lib/features/parent/parent_dashboard_screen.dart nc_v21_work/src/lib/features/parent/parent_dashboard_screen.dart
+--- nc_v19_base/lib/features/parent/parent_dashboard_screen.dart	2026-08-21 16:51:41.000000000 +0000
++++ nc_v21_work/src/lib/features/parent/parent_dashboard_screen.dart	2026-10-04 00:57:37.566862305 +0000
+@@ -3,6 +3,7 @@
+ import '../../core/bootstrap/app_services.dart';
+ import '../../core/profile/profile_models.dart';
+ import '../../core/quality/session_quality.dart';
++import 'parent_guide_screen.dart';
+ import 'privacy_management_screen.dart';
+ import 'session_detail_screen.dart';
+ 
+@@ -126,6 +127,12 @@
+     await _refresh();
+   }
+ 
++  Future<void> _openGuide() async {
++    await Navigator.of(context).push<void>(
++      MaterialPageRoute<void>(builder: (_) => const ParentGuideScreen()),
++    );
++  }
++
+   Future<void> _openPrivacy() async {
+     final profileId = _selectedProfileId;
+     if (profileId == null) return;
+@@ -215,7 +222,17 @@
+                       ],
+                     ),
+                     const SizedBox(height: 22),
+-                    _NeuroProfileCard(profile: _neuroProfile!),
++                    Card(
++                      child: ListTile(
++                        leading: const Icon(Icons.menu_book_rounded),
++                        title: const Text('Guia para responsáveis', style: TextStyle(fontWeight: FontWeight.w800)),
++                        subtitle: const Text('Faixa etária, objetivo de cada missão, limites dos resultados e orientação de uso.'),
++                        trailing: const Icon(Icons.chevron_right_rounded),
++                        onTap: _openGuide,
++                      ),
++                    ),
++                    const SizedBox(height: 14),
++                    _NeuroProfileCard(profile: _neuroProfile!, sessions: _sessions),
+                     const SizedBox(height: 14),
+                     _DatasetQualityCard(snapshot: _datasetQuality!),
+                     const SizedBox(height: 14),
+@@ -306,35 +323,25 @@
+ }
+ 
+ class _NeuroProfileCard extends StatelessWidget {
+-  const _NeuroProfileCard({required this.profile});
++  const _NeuroProfileCard({required this.profile, required this.sessions});
+ 
+   final NeuroProfileView profile;
++  final List<SessionReview> sessions;
++
++  int _count(String gameId) => sessions
++      .where((s) => s.status == 'completed' && s.gameId == gameId)
++      .length;
++
++  bool get _hasAnyIndicator =>
++      profile.sustainedAttentionIndicator != null ||
++      profile.inhibitoryControlIndicator != null ||
++      profile.workingMemoryIndicator != null ||
++      profile.cognitiveFlexibilityIndicator != null ||
++      profile.selfRegulationPracticeIndicator != null ||
++      profile.socialEmotionalLearningIndicator != null;
+ 
+   @override
+   Widget build(BuildContext context) {
+-    if (!profile.hasData) {
+-      return Container(
+-        padding: const EdgeInsets.all(20),
+-        decoration: BoxDecoration(
+-          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+-          borderRadius: BorderRadius.circular(22),
+-        ),
+-        child: const Column(
+-          crossAxisAlignment: CrossAxisAlignment.start,
+-          children: [
+-            Text(
+-              'NeuroProfile',
+-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
+-            ),
+-            SizedBox(height: 10),
+-            Text(
+-              'Ainda não há sessões concluídas suficientes para formar o perfil longitudinal.',
+-            ),
+-          ],
+-        ),
+-      );
+-    }
+-
+     return Container(
+       padding: const EdgeInsets.all(20),
+       decoration: BoxDecoration(
+@@ -348,76 +355,87 @@
+             children: [
+               const Expanded(
+                 child: Text(
+-                  'NeuroProfile',
++                  'Indicadores por missão',
+                   style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
+                 ),
+               ),
+               Text('${profile.sessionCount} sessões'),
+             ],
+           ),
+-          const SizedBox(height: 18),
+-          if (profile.sustainedAttentionIndicator != null)
+-            _Indicator(
+-              label: 'Atenção no gameplay',
+-              value: profile.sustainedAttentionIndicator!,
+-            ),
+-          if (profile.inhibitoryControlIndicator != null)
+-            _Indicator(
+-              label: 'Controle inibitório no gameplay',
+-              value: profile.inhibitoryControlIndicator!,
+-            ),
+-          if (profile.workingMemoryIndicator != null)
+-            _Indicator(
+-              label: 'Memória de trabalho no gameplay',
+-              value: profile.workingMemoryIndicator!,
+-            ),
+-          if (profile.cognitiveFlexibilityIndicator != null)
+-            _Indicator(
+-              label: 'Flexibilidade cognitiva no gameplay',
+-              value: profile.cognitiveFlexibilityIndicator!,
+-            ),
+-          if (profile.selfRegulationPracticeIndicator != null)
+-            _Indicator(
+-              label: 'Prática de autorregulação no gameplay',
+-              value: profile.selfRegulationPracticeIndicator!,
+-            ),
+-          if (profile.socialEmotionalLearningIndicator != null)
+-            _Indicator(
+-              label: 'Aprendizagem socioemocional no gameplay',
+-              value: profile.socialEmotionalLearningIndicator!,
+-            ),
+-          if (profile.responseConsistencyIndicator != null)
+-            _Indicator(
+-              label: 'Consistência do tempo de resposta',
+-              value: profile.responseConsistencyIndicator!,
+-            ),
+-          if (profile.overallGameplayIndicator != null)
+-            _Indicator(
+-              label: 'Indicador global de gameplay',
+-              value: profile.overallGameplayIndicator!,
++          const SizedBox(height: 8),
++          const Text(
++            'Cada indicador só aparece após 3 sessões concluídas do mesmo jogo. Jogos diferentes não são somados em uma nota global.',
++            style: TextStyle(fontSize: 13, height: 1.4),
++          ),
++          const SizedBox(height: 16),
++          _DomainRow(
++            label: 'Atenção • Missão Foco',
++            count: _count('G01_missao_foco'),
++            value: profile.sustainedAttentionIndicator,
++          ),
++          _DomainRow(
++            label: 'Controle inibitório • Pare, Pense, Vá!',
++            count: _count('G02_pare_pense_va'),
++            value: profile.inhibitoryControlIndicator,
++          ),
++          _DomainRow(
++            label: 'Memória de trabalho • Memória Mágica',
++            count: _count('G03_memoria_magica'),
++            value: profile.workingMemoryIndicator,
++          ),
++          _DomainRow(
++            label: 'Flexibilidade • Troca-Troca',
++            count: _count('G04_troca_troca'),
++            value: profile.cognitiveFlexibilityIndicator,
++          ),
++          _DomainRow(
++            label: 'Prática de autorregulação • Montanha da Calma',
++            count: _count('G05_montanha_calma'),
++            value: profile.selfRegulationPracticeIndicator,
++          ),
++          _DomainRow(
++            label: 'Aprendizagem social • Mundo dos Amigos',
++            count: _count('G06_mundo_amigos'),
++            value: profile.socialEmotionalLearningIndicator,
++          ),
++          if (!_hasAnyIndicator) ...[
++            const SizedBox(height: 6),
++            const Text(
++              'Ainda não há repetição suficiente em uma mesma missão para exibir tendência de desempenho.',
++              style: TextStyle(fontWeight: FontWeight.w700),
+             ),
++          ],
+           const SizedBox(height: 8),
+-          Text(
+-            'Dificuldade média adaptativa: ${profile.averageDifficulty!.toStringAsFixed(1)} / 5',
++          const Text(
++            'Esses valores descrevem desempenho dentro do jogo. Não são percentis clínicos, diagnóstico, prognóstico ou medida de melhora fora do aplicativo.',
++            style: TextStyle(fontSize: 12, height: 1.4),
+           ),
+-          const SizedBox(height: 4),
