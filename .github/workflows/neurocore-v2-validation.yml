@@ -1,0 +1,235 @@
+name: NeuroCore V2 UX Content Validation
+on:
+  push:
+    branches: [neurocore-v2-content-ux-audit]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Fetch validated V1.9 construction inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin neurocore-local-v1-7-validation:refs/remotes/origin/neurocore-local-v1-7-validation --depth=1
+          rm -rf /tmp/legacy
+          mkdir -p /tmp/legacy
+          git archive origin/neurocore-local-v1-7-validation neurocore/ci/source_chunks neurocore/ci/v1_9_patch neurocore/ci/v1_9_overlay | tar -x -C /tmp/legacy
+          cat /tmp/legacy/neurocore/ci/source_chunks/chunk_*.b64 > /tmp/source.b64
+          base64 --decode /tmp/source.b64 > /tmp/source.tar.gz
+          echo '0aa63928c44bbacc142db6449abb51abfb91de3bb00d92e07211a465ea39aaf2  /tmp/source.tar.gz' | sha256sum --check --strict
+          mkdir -p /tmp/neurocore
+          tar -xzf /tmp/source.tar.gz -C /tmp/neurocore
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.0'
+          channel: stable
+          cache: true
+
+      - name: Rebuild hardened Android baseline and V1.9
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/ncwrap
+          flutter create --org br.com.neurocore --project-name neurocore_app --platforms=android /tmp/ncwrap
+          cp -a /tmp/ncwrap/android /tmp/neurocore/android
+          python3 - <<'PY'
+          from pathlib import Path
+          root=Path('/tmp/neurocore')
+          p=root/'pubspec.yaml'
+          s=p.read_text().replace('flutter_secure_storage: ^11.0.0','flutter_secure_storage: 10.3.1')
+          s='\n'.join(x for x in s.splitlines() if not x.strip().startswith('cryptography_flutter:'))+'\n'
+          p.write_text(s)
+          m=root/'lib/main.dart'
+          s=m.read_text().replace("import 'package:cryptography_flutter/cryptography_flutter.dart';\n",'').replace('  FlutterCryptography.enable();\n','').replace('FlutterCryptography.enable();\n','')
+          m.write_text(s)
+          k=root/'android/app/build.gradle.kts'
+          k.write_text(k.read_text().replace('minSdk = flutter.minSdkVersion','minSdk = 24').replace('minSdk = 23','minSdk = 24'))
+          manifest=root/'android/app/src/main/AndroidManifest.xml'
+          manifest.write_text(manifest.read_text().replace('<application','<application android:allowBackup="false" android:usesCleartextTraffic="false"',1))
+          PY
+          cd /tmp/neurocore
+          flutter pub get
+          dart fix --apply
+          python3 - <<'PY'
+          from pathlib import Path
+          c=Path('lib/core/security/crypto_box.dart')
+          s=c.read_text().replace('const FlutterSecureStorage _secureStorage = FlutterSecureStorage();','final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();').replace('const FlutterSecureStorage _secureStorage = const FlutterSecureStorage();','final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();')
+          c.write_text(s)
+          p=Path('pubspec.yaml')
+          p.write_text('\n'.join(x for x in p.read_text().splitlines() if not x.strip().startswith('cryptography_flutter:'))+'\n')
+          m=Path('lib/main.dart')
+          m.write_text(m.read_text().replace("import 'package:cryptography_flutter/cryptography_flutter.dart';\n",'').replace('  FlutterCryptography.enable();\n','').replace('FlutterCryptography.enable();\n',''))
+          PY
+          dart format lib test
+          flutter pub get
+          cat /tmp/legacy/neurocore/ci/v1_9_patch/part_*.patch > /tmp/v19.patch
+          set +e
+          patch -p1 --batch --forward < /tmp/v19.patch
+          STATUS=$?
+          set -e
+          REJECTS=$(find . -name '*.rej' -print)
+          if [ -n "$REJECTS" ]; then
+            BAD=$(echo "$REJECTS" | grep -v '^./lib/features/g06_social/g06_screen.dart.rej$' || true)
+            test -z "$BAD"
+          elif [ "$STATUS" -ne 0 ]; then
+            exit 1
+          fi
+          cp -a /tmp/legacy/neurocore/ci/v1_9_overlay/. /tmp/neurocore/
+          rm -f lib/features/g06_social/g06_screen.dart.rej
+          dart fix --apply
+          dart format lib test
+          flutter pub get
+
+      - name: Apply V2 audited UX and content overlay
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp -a neurocore/v2_overlay/. /tmp/neurocore/
+          cd /tmp/neurocore
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('pubspec.yaml')
+          s=p.read_text().replace('version: 1.9.0+19','version: 2.0.0+20').replace('version: 1.7.0+17','version: 2.0.0+20')
+          s=s.replace('description: NeuroCore V1.9 AUDITED - plataforma neuroeducacional infantil offline-first com acessibilidade, privacidade, QA e release hardening.','description: NeuroCore V2.0 - plataforma neuroeducacional infantil com UX revisada, guia parental, conteúdo coerente e privacidade local-first.')
+          p.write_text(s)
+
+          d=Path('lib/features/parent/parent_dashboard_screen.dart')
+          s=d.read_text()
+          if "import 'parent_guide_screen.dart';" not in s:
+            s=s.replace("import 'privacy_management_screen.dart';", "import 'parent_guide_screen.dart';\nimport 'privacy_management_screen.dart';")
+          marker="""                    const SizedBox(height: 14),\n                    Card(\n                      child: ListTile(\n                        leading: const Icon(Icons.privacy_tip_outlined),"""
+          guide="""                    const SizedBox(height: 14),\n                    Card(\n                      child: ListTile(\n                        leading: const Icon(Icons.menu_book_rounded),\n                        title: const Text('Guia para responsáveis', style: TextStyle(fontWeight: FontWeight.w800)),\n                        subtitle: const Text('Objetivos reais de cada missão, faixa etária, limites dos indicadores e informações de mercado.'),\n                        trailing: const Icon(Icons.chevron_right_rounded),\n                        onTap: () => Navigator.of(context).push<void>(\n                          MaterialPageRoute<void>(builder: (_) => const ParentGuideScreen()),\n                        ),\n                      ),\n                    ),\n                    const SizedBox(height: 14),\n                    Card(\n                      child: ListTile(\n                        leading: const Icon(Icons.privacy_tip_outlined),"""
+          if marker not in s:
+            raise SystemExit('parent dashboard insertion point not found')
+          d.write_text(s.replace(marker, guide, 1))
+
+          f=Path('lib/ml/feature_contract.dart')
+          s=f.read_text().replace("hitRate: _unit(_asDouble(performance['context_match_rate'])),", "hitRate: _unit(_asDouble(performance['supportive_choice_rate'])),")
+          f.write_text(s)
+          PY
+
+          cat > test/neuro_profile_aggregator_test.dart <<'EOF'
+          import 'package:flutter_test/flutter_test.dart';
+          import 'package:neurocore_app/core/profile/neuro_profile_aggregator.dart';
+          import 'package:neurocore_app/ml/feature_contract.dart';
+          void main() {
+            SessionFeatureVectorV1 feature(int index) => SessionFeatureVectorV1(
+              profileId:'p1', sessionId:'s$index', gameId:'G01_missao_foco', completedAt:DateTime.utc(2026,8,1+index),
+              hitRate:.80, commissionRate:.10, omissionRate:.05, reactionTimeCv:.20, medianReactionTimeMs:700, finalDifficulty:2, blocksCompleted:5);
+            test('requires three same-game sessions and no global score', () {
+              final a=const NeuroProfileAggregator().aggregate(profileId:'p1',features:[feature(0),feature(1)]);
+              expect(a.sustainedAttentionIndicator,isNull);
+              final b=const NeuroProfileAggregator().aggregate(profileId:'p1',features:[feature(0),feature(1),feature(2)]);
+              expect(b.sustainedAttentionIndicator,isNotNull);
+              expect(b.overallGameplayIndicator,isNull);
+            });
+          }
+          EOF
+
+          cat > test/neuro_profile_multidomain_test.dart <<'EOF'
+          import 'package:flutter_test/flutter_test.dart';
+          import 'package:neurocore_app/core/profile/neuro_profile_aggregator.dart';
+          import 'package:neurocore_app/ml/feature_contract.dart';
+          void main(){
+            SessionFeatureVectorV1 f(String game,int i)=>SessionFeatureVectorV1(profileId:'p',sessionId:'$game-$i',gameId:game,completedAt:DateTime.utc(2026,8,1+i),hitRate:.85,commissionRate:.1,omissionRate:.05,reactionTimeCv:.2,medianReactionTimeMs:700,finalDifficulty:2,blocksCompleted:3);
+            test('six domains stay separate',(){
+              const games=['G01_missao_foco','G02_pare_pense_va','G03_memoria_magica','G04_troca_troca','G05_montanha_calma','G06_mundo_amigos'];
+              final x=<SessionFeatureVectorV1>[]; for(final g in games){for(var i=0;i<3;i++){x.add(f(g,i));}}
+              final v=const NeuroProfileAggregator().aggregate(profileId:'p',features:x);
+              expect(v.sustainedAttentionIndicator,isNotNull); expect(v.inhibitoryControlIndicator,isNotNull); expect(v.workingMemoryIndicator,isNotNull); expect(v.cognitiveFlexibilityIndicator,isNotNull); expect(v.selfRegulationPracticeIndicator,isNotNull); expect(v.socialEmotionalLearningIndicator,isNotNull); expect(v.overallGameplayIndicator,isNull);
+            });
+          }
+          EOF
+
+          cat > test/v20_product_audit_test.dart <<'EOF'
+          import 'package:flutter_test/flutter_test.dart';
+          import 'package:neurocore_app/core/product/product_info.dart';
+          import 'package:neurocore_app/features/g06_social/social_scenario.dart';
+          void main(){
+            test('age and clinical boundary are explicit',(){expect(NeuroCoreProductInfo.recommendedAge,'6 a 11 anos'); expect(NeuroCoreProductInfo.clinicalBoundary.toLowerCase(),contains('não trata'));});
+            test('social stories permit multiple supportive answers',(){for(final s in SocialScenario.examples){expect(s.supportiveIndices.length,greaterThanOrEqualTo(2)); expect(s.supportiveIndices,contains(s.preferredIndex));}});
+          }
+          EOF
+
+          dart fix --apply
+          dart format lib test
+          flutter pub get
+          grep -q '^version: 2.0.0+20' pubspec.yaml
+          grep -q "recommendedAge = '6 a 11 anos'" lib/core/product/product_info.dart
+          grep -q 'minimumSessionsPerDomain = 3' lib/core/profile/neuro_profile_aggregator.dart
+          grep -q 'supportiveIndices' lib/features/g06_social/social_scenario.dart
+          grep -q 'guided_self_regulation_practice_non_diagnostic' lib/features/g05_regulation/g05_screen.dart
+          ! grep -R -q 'NeuroCore V0.6' lib
+          ! grep -R -q 'V1.7 FINAL RC2' lib
+          ! grep -E -q 'google_mobile_ads|firebase_analytics|facebook_app_events|amplitude_flutter|mixpanel_flutter|geolocator|app_tracking_transparency' pubspec.yaml
+
+      - name: Flutter analyze strict
+        working-directory: /tmp/neurocore
+        run: flutter analyze
+
+      - name: Flutter tests
+        working-directory: /tmp/neurocore
+        run: flutter test --reporter expanded
+
+      - name: Build Android APK
+        working-directory: /tmp/neurocore
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter build apk --debug 2>&1 | tee /tmp/build.log
+          ! grep -q 'plugins that apply Kotlin Gradle Plugin' /tmp/build.log
+
+      - name: Create evidence and package source
+        working-directory: /tmp/neurocore
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=build/app/outputs/flutter-apk/app-debug.apk
+          test -s "$APK"
+          APK_SHA=$(sha256sum "$APK" | awk '{print $1}')
+          tar -czf neurocore_v2_0_source.tar.gz pubspec.yaml pubspec.lock analysis_options.yaml lib test android
+          SOURCE_SHA=$(sha256sum neurocore_v2_0_source.tar.gz | awk '{print $1}')
+          python3 - "$APK_SHA" "$SOURCE_SHA" <<'PY'
+          import json,sys
+          data={
+            'version':'2.0.0+20',
+            'flutter_analyze':'pass',
+            'flutter_tests':'pass',
+            'android_apk':'pass',
+            'recommended_age':'6-11',
+            'home_layout':'redesigned_compact_child_facing',
+            'parent_guide':'included',
+            'domain_min_sessions':3,
+            'global_cross_game_score':'disabled',
+            'g05':'guided_regulation_practice',
+            'g06':'multiple_supportive_responses',
+            'clinical_positioning':'neuroeducational_non_diagnostic_non_treatment',
+            'current_language':'pt-BR',
+            'internationalization':'global_possible_localization_pending',
+            'apk_sha256':sys.argv[1],
+            'source_sha256':sys.argv[2],
+          }
+          open('neurocore_v2_0_evidence.json','w').write(json.dumps(data,indent=2,ensure_ascii=False)+'\n')
+          PY
+          cat neurocore_v2_0_evidence.json
+
+      - name: Upload validated V2 APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: neurocore-v2.0-ux-content-audited-android
+          path: |
+            /tmp/neurocore/build/app/outputs/flutter-apk/app-debug.apk
+            /tmp/neurocore/neurocore_v2_0_evidence.json
+            /tmp/neurocore/neurocore_v2_0_source.tar.gz
+            /tmp/neurocore/pubspec.lock
+          if-no-files-found: error
+          retention-days: 14
