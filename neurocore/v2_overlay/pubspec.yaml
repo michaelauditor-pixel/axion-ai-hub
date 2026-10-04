@@ -1,0 +1,24 @@
+name: neurocore_app
+description: NeuroCore V2.0 - plataforma neuroeducacional infantil com UX revisada, guia parental, conteúdo coerente, áudio local e privacidade local-first.
+publish_to: "none"
+version: 2.0.0+20
+
+environment:
+  sdk: ">=3.10.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  audioplayers: ^6.8.1
+  cryptography: ^2.9.0
+  flutter_secure_storage: 10.3.1
+  path: ^1.9.1
+  path_provider: ^2.1.6
+  sqflite: ^2.4.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true
