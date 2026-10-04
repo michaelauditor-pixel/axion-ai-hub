@@ -1,0 +1,177 @@
+diff -ruN source_before/lib/core/bootstrap/app_services.dart source_after/lib/core/bootstrap/app_services.dart
+--- source_before/lib/core/bootstrap/app_services.dart	2026-08-21 13:15:46.000000000 +0000
++++ source_after/lib/core/bootstrap/app_services.dart	2026-08-21 14:41:54.938044238 +0000
+@@ -1,6 +1,7 @@
+ import '../accessibility/accessibility_service.dart';
+ import '../data/local_database.dart';
+ import '../data/neuro_repository.dart';
++import '../feedback/game_feedback_service.dart';
+ import '../onboarding/guardian_notice_service.dart';
+ import '../privacy/data_lifecycle_service.dart';
+ import '../profile/neuro_profile_service.dart';
+@@ -20,6 +21,7 @@
+     required this.dataLifecycle,
+     required this.accessibility,
+     required this.guardianNotice,
++    required this.feedback,
+   });
+ 
+   final LocalDatabase database;
+@@ -31,6 +33,7 @@
+   final DataLifecycleService dataLifecycle;
+   final AccessibilityService accessibility;
+   final GuardianNoticeService guardianNotice;
++  final GameFeedbackService feedback;
+ 
+   static Future<AppServices> create() async {
+     final cryptoBox = CryptoBox();
+@@ -53,6 +56,7 @@
+     final accessibility = AccessibilityService(database: database);
+     await accessibility.initialize();
+     final guardianNotice = GuardianNoticeService();
++    final feedback = GameFeedbackService(accessibility: accessibility);
+ 
+     return AppServices._(
+       database: database,
+@@ -64,6 +68,7 @@
+       dataLifecycle: dataLifecycle,
+       accessibility: accessibility,
+       guardianNotice: guardianNotice,
++      feedback: feedback,
+     );
+   }
+ }
+diff -ruN source_before/lib/core/feedback/game_feedback_service.dart source_after/lib/core/feedback/game_feedback_service.dart
+--- source_before/lib/core/feedback/game_feedback_service.dart	1970-01-01 00:00:00.000000000 +0000
++++ source_after/lib/core/feedback/game_feedback_service.dart	2026-08-21 14:41:46.510891470 +0000
+@@ -0,0 +1,52 @@
++import 'dart:async';
++
++import 'package:flutter/services.dart';
++
++import '../accessibility/accessibility_service.dart';
++
++/// Feedback audiovisual leve e não punitivo para a área infantil.
++/// Usa apenas recursos do sistema, sem SDKs externos ou rastreamento.
++class GameFeedbackService {
++  const GameFeedbackService({required AccessibilityService accessibility})
++    : _accessibility = accessibility;
++
++  final AccessibilityService _accessibility;
++
++  Future<void> start() async {
++    await _soundPulse(count: 1);
++    if (_accessibility.preferences.hapticsEnabled) {
++      await HapticFeedback.selectionClick();
++    }
++  }
++
++  Future<void> correct() async {
++    await _soundPulse(count: 2, spacingMs: 70);
++    if (_accessibility.preferences.hapticsEnabled) {
++      await HapticFeedback.lightImpact();
++    }
++  }
++
++  Future<void> gentleMiss() async {
++    await _soundPulse(count: 1);
++    if (_accessibility.preferences.hapticsEnabled) {
++      await HapticFeedback.selectionClick();
++    }
++  }
++
++  Future<void> complete() async {
++    await _soundPulse(count: 3, spacingMs: 85);
++    if (_accessibility.preferences.hapticsEnabled) {
++      await HapticFeedback.mediumImpact();
++    }
++  }
++
++  Future<void> _soundPulse({required int count, int spacingMs = 60}) async {
++    if (!_accessibility.preferences.soundEnabled) return;
++    for (var i = 0; i < count; i += 1) {
++      await SystemSound.play(SystemSoundType.click);
++      if (i + 1 < count) {
++        await Future<void>.delayed(Duration(milliseconds: spacingMs));
++      }
++    }
++  }
++}
+diff -ruN source_before/lib/features/g01_focus/g01_screen.dart source_after/lib/features/g01_focus/g01_screen.dart
+--- source_before/lib/features/g01_focus/g01_screen.dart	2026-08-21 13:15:46.000000000 +0000
++++ source_after/lib/features/g01_focus/g01_screen.dart	2026-08-21 14:45:22.481991790 +0000
+@@ -36,6 +36,8 @@
+   final List<PerformanceSnapshot> _completedBlocks = [];
+ 
+   FocusTrial? _trial;
++  List<bool> _presenceSchedule = const [];
++  int _presenceCursor = 0;
+   Timer? _trialTimer;
+   DateTime? _trialStartedAt;
+ 
+@@ -81,6 +83,8 @@
+       },
+     );
+ 
++    await widget.services.feedback.start();
++
+     if (!mounted) {
+       return;
+     }
+@@ -91,12 +95,20 @@
+   Future<void> _startBlock() async {
+     _blockPerformance = PerformanceAccumulator();
+     _trialIndex = 0;
++    _presenceCursor = 0;
+     _blockIndex += 1;
+ 
+     final config = DifficultyConfig.forLevel(_adaptiveState.level);
++    _presenceSchedule = _generator.generatePresenceSchedule(
++      config,
++      _trialsPerBlock,
++    );
+     await _record('block_started', {
+       'block': _blockIndex,
+       'difficulty': config.toJson(),
++      'target_present_planned': _presenceSchedule.where((v) => v).length,
++      'target_absent_planned': _presenceSchedule.where((v) => !v).length,
++      'max_same_presence_streak': 4,
+     });
+ 
+     if (!mounted) {
+@@ -108,7 +120,13 @@
+   Future<void> _startTrial() async {
+     _trialTimer?.cancel();
+     final config = DifficultyConfig.forLevel(_adaptiveState.level);
+-    final trial = _generator.generate(config);
++    if (_presenceCursor >= _presenceSchedule.length) return;
++    final targetPresent = _presenceSchedule[_presenceCursor];
++    _presenceCursor += 1;
++    final trial = _generator.generate(
++      config,
++      targetPresentOverride: targetPresent,
++    );
+     _trial = trial;
+     _trialIndex += 1;
+     _resolved = false;
+@@ -153,10 +171,12 @@
+       outcome = 'hit';
+       _blockPerformance.hits += 1;
+       _blockPerformance.reactionTimesMs.add(reactionTime);
++      await widget.services.feedback.correct();
+       _feedback = 'Muito bem!';
+     } else {
+       outcome = 'commission';
+       _blockPerformance.commissions += 1;
++      await widget.services.feedback.gentleMiss();
+       _feedback = 'Quase! Procure a estrela azul.';
+     }
+ 
+@@ -186,9 +206,11 @@
+     final outcome = trial.targetPresent ? 'omission' : 'correct_rejection';
+     if (trial.targetPresent) {
+       _blockPerformance.omissions += 1;
++      await widget.services.feedback.gentleMiss();
+       _feedback = 'Tudo bem. Vamos para a próxima.';
+     } else {
+       _blockPerformance.correctRejections += 1;

@@ -1,0 +1,326 @@
++    final displayChoices = [for (final i in selected) choices[i]];
++    final displaySupportive = <int>[];
++    for (var display = 0; display < selected.length; display++) {
++      if (supportiveIndices.contains(selected[display])) displaySupportive.add(display);
++    }
++
+     return PresentedSocialScenario(
+       story: story,
+-      choices: visible,
+-      preferredIndex: targetPosition,
++      choices: displayChoices,
++      preferredIndex: desired,
++      supportiveIndices: displaySupportive,
+     );
+   }
+ 
+   static const examples = <SocialScenario>[
+     SocialScenario(
+-      story: 'Uma colega deixou cair os lápis e parece ocupada juntando tudo.',
++      story: 'Uma colega deixou cair os lápis enquanto organiza a mochila.',
+       choices: [
+-        'Oferecer ajuda',
+-        'Continuar a própria atividade sem atrapalhar',
+-        'Rir dela',
++        'Perguntar se ela quer ajuda',
++        'Dar espaço e continuar sem atrapalhar',
++        'Rir do que aconteceu',
++        'Pegar as coisas dela sem perguntar',
+       ],
+       preferredIndex: 0,
++      supportiveIndices: [0, 1],
+     ),
+     SocialScenario(
+       story: 'Um amigo diz que quer brincar sozinho por alguns minutos.',
+       choices: [
+-        'Respeitar o espaço',
+-        'Perguntar depois se ele quer companhia',
++        'Respeitar o espaço dele',
++        'Perguntar mais tarde se quer companhia',
+         'Insistir até ele aceitar',
++        'Dizer que ele não pode ficar sozinho',
+       ],
+       preferredIndex: 0,
++      supportiveIndices: [0, 1],
+     ),
+     SocialScenario(
+-      story: 'Duas crianças querem usar o mesmo brinquedo.',
++      story: 'Duas crianças querem usar o mesmo brinquedo ao mesmo tempo.',
+       choices: [
+         'Combinar turnos',
+-        'Procurar outra brincadeira enquanto espera',
+-        'Gritar mais alto',
++        'Escolher outra brincadeira enquanto espera',
++        'Arrancar o brinquedo',
++        'Gritar para decidir quem fica com ele',
+       ],
+       preferredIndex: 0,
++      supportiveIndices: [0, 1],
+     ),
+     SocialScenario(
+-      story: 'Alguém não entendeu a regra de uma brincadeira.',
++      story: 'Uma criança não entendeu a regra da brincadeira.',
+       choices: [
+         'Explicar com calma',
+         'Mostrar um exemplo',
+         'Excluir da brincadeira',
++        'Dizer que é fácil e ir embora',
+       ],
+       preferredIndex: 0,
++      supportiveIndices: [0, 1],
+     ),
+     SocialScenario(
+-      story: 'Uma criança está falando e você também quer contar uma coisa.',
++      story: 'Alguém está falando e você também quer contar uma coisa.',
+       choices: [
+         'Esperar uma pausa e pedir a vez',
+         'Guardar a ideia para contar depois',
+         'Interromper gritando',
++        'Falar por cima até ser ouvido',
+       ],
+       preferredIndex: 0,
++      supportiveIndices: [0, 1],
+     ),
+     SocialScenario(
+       story: 'Seu colega escolheu uma brincadeira diferente da sua.',
+@@ -96,27 +136,76 @@
+         'Conversar para encontrar uma opção boa para os dois',
+         'Brincar separado por um tempo sem brigar',
+         'Obrigar o colega a mudar',
++        'Dizer que a escolha dele é ruim',
+       ],
+       preferredIndex: 0,
++      supportiveIndices: [0, 1],
+     ),
+     SocialScenario(
+-      story: 'Um amigo parece chateado e não quer explicar o motivo.',
++      story: 'Um amigo está quieto e diz que não quer falar sobre o assunto.',
+       choices: [
+-        'Dizer que você está disponível se ele quiser falar',
++        'Dizer que você está disponível se ele quiser conversar',
+         'Dar espaço com respeito',
+-        'Ficar perguntando sem parar',
++        'Continuar perguntando sem parar',
++        'Contar para outras pessoas para descobrir o motivo',
+       ],
+-      preferredIndex: 0,
++      preferredIndex: 1,
++      supportiveIndices: [0, 1],
+     ),
+     SocialScenario(
+-      story:
+-          'Você percebe que entendeu uma fala de um jeito diferente do colega.',
++      story: 'Você entendeu uma fala de um jeito diferente do colega.',
+       choices: [
+         'Perguntar com calma o que ele quis dizer',
+-        'Explicar como você entendeu',
++        'Explicar como você entendeu e ouvir a resposta',
+         'Decidir que ele fez de propósito',
++        'Parar de falar com ele sem explicar',
++      ],
++      preferredIndex: 0,
++      supportiveIndices: [0, 1],
++    ),
++    SocialScenario(
++      story: 'Você esbarrou sem querer em alguém durante a brincadeira.',
++      choices: [
++        'Perguntar se a pessoa está bem e se desculpar',
++        'Parar e ouvir se ela quiser falar',
++        'Culpar a outra pessoa imediatamente',
++        'Fingir que nada aconteceu e rir',
++      ],
++      preferredIndex: 0,
++      supportiveIndices: [0, 1],
++    ),
++    SocialScenario(
++      story: 'Você precisa de ajuda para terminar uma atividade.',
++      choices: [
++        'Pedir ajuda de forma clara',
++        'Explicar em qual parte ficou difícil',
++        'Jogar o material no chão',
++        'Dizer que ninguém pode ajudar',
++      ],
++      preferredIndex: 1,
++      supportiveIndices: [0, 1],
++    ),
++    SocialScenario(
++      story: 'Um colega diz “não” para uma brincadeira que você sugeriu.',
++      choices: [
++        'Aceitar o não e pensar em outra opção',
++        'Perguntar se ele prefere outra brincadeira',
++        'Continuar pressionando até ele mudar de ideia',
++        'Chamar o colega de chato',
++      ],
++      preferredIndex: 0,
++      supportiveIndices: [0, 1],
++    ),
++    SocialScenario(
++      story: 'Você e um colega discordam sobre como montar alguma coisa.',
++      choices: [
++        'Cada um explica sua ideia e vocês comparam',
++        'Testar uma opção e depois a outra',
++        'Dizer que só a sua ideia vale',
++        'Abandonar a atividade sem falar nada',
+       ],
+       preferredIndex: 0,
++      supportiveIndices: [0, 1],
+     ),
+   ];
+ }
+diff -ruN '--exclude=*.orig' '--exclude=assets' nc_v19_base/lib/features/home/home_screen.dart nc_v21_work/src/lib/features/home/home_screen.dart
+--- nc_v19_base/lib/features/home/home_screen.dart	2026-08-21 16:51:41.000000000 +0000
++++ nc_v21_work/src/lib/features/home/home_screen.dart	2026-10-04 00:53:13.158242137 +0000
+@@ -2,6 +2,7 @@
+ 
+ import '../../core/bootstrap/app_services.dart';
+ import '../../core/profile/profile_models.dart';
++import '../../core/product_info.dart';
+ import '../g01_focus/g01_screen.dart';
+ import '../g02_inhibition/g02_screen.dart';
+ import '../g03_memory/g03_screen.dart';
+@@ -23,7 +24,6 @@
+ class _HomeScreenState extends State<HomeScreen> {
+   List<ChildProfile> _profiles = const [];
+   String? _activeProfileId;
+-  int? _completedSessions;
+   bool _loading = true;
+ 
+   ChildProfile? get _activeProfile {
+@@ -40,76 +40,32 @@
+   }
+ 
+   Future<void> _bootstrap() async {
+-    final defaultProfileId = await widget.services.repository
+-        .ensureDefaultProfile();
++    final defaultProfileId = await widget.services.repository.ensureDefaultProfile();
+     _activeProfileId ??= defaultProfileId;
+     await _refresh();
+   }
+ 
+   Future<void> _refresh() async {
+     final profiles = await widget.services.repository.listProfiles();
+-    if (profiles.isNotEmpty &&
+-        !profiles.any((p) => p.profileId == _activeProfileId)) {
++    if (profiles.isNotEmpty && !profiles.any((p) => p.profileId == _activeProfileId)) {
+       _activeProfileId = profiles.first.profileId;
+     }
+-    final count = _activeProfileId == null
+-        ? 0
+-        : await widget.services.repository.completedSessionCount(
+-            profileId: _activeProfileId,
+-          );
+     if (!mounted) return;
+     setState(() {
+       _profiles = profiles;
+-      _completedSessions = count;
+       _loading = false;
+     });
+   }
+ 
+-  Future<void> _openG01() => _openGame(
+-    (profileId) =>
+-        G01FocusScreen(services: widget.services, profileId: profileId),
+-  );
+-
+-  Future<void> _openG02() => _openGame(
+-    (profileId) =>
+-        G02InhibitionScreen(services: widget.services, profileId: profileId),
+-  );
+-
+-  Future<void> _openG03() => _openGame(
+-    (profileId) =>
+-        G03MemoryScreen(services: widget.services, profileId: profileId),
+-  );
+-
+-  Future<void> _openG04() => _openGame(
+-    (profileId) =>
+-        G04FlexibilityScreen(services: widget.services, profileId: profileId),
+-  );
+-
+-  Future<void> _openG05() => _openGame(
+-    (profileId) =>
+-        G05RegulationScreen(services: widget.services, profileId: profileId),
+-  );
+-
+-  Future<void> _openG06() => _openGame(
+-    (profileId) =>
+-        G06SocialScreen(services: widget.services, profileId: profileId),
+-  );
+-
+   Future<void> _openGame(Widget Function(String profileId) builder) async {
+     final profileId = _activeProfileId;
+     if (profileId == null) return;
+-    await Navigator.of(
+-      context,
+-    ).push<void>(MaterialPageRoute<void>(builder: (_) => builder(profileId)));
++    await Navigator.of(context).push<void>(MaterialPageRoute<void>(builder: (_) => builder(profileId)));
+     await _refresh();
+   }
+ 
+   Future<void> _openAccessibility() async {
+-    await Navigator.of(context).push<void>(
+-      MaterialPageRoute<void>(
+-        builder: (_) => AccessibilityScreen(services: widget.services),
+-      ),
+-    );
++    await Navigator.of(context).push<void>(MaterialPageRoute<void>(builder: (_) => AccessibilityScreen(services: widget.services)));
+   }
+ 
+   Future<void> _openParentArea() async {
+@@ -117,10 +73,7 @@
+     if (profileId == null) return;
+     final selected = await Navigator.of(context).push<String>(
+       MaterialPageRoute<String>(
+-        builder: (_) => ParentAccessScreen(
+-          services: widget.services,
+-          initialProfileId: profileId,
+-        ),
++        builder: (_) => ParentAccessScreen(services: widget.services, initialProfileId: profileId),
+       ),
+     );
+     if (selected != null) _activeProfileId = selected;
+@@ -129,186 +82,154 @@
+ 
+   @override
+   Widget build(BuildContext context) {
+-    if (_loading)
+-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
++    if (_loading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
++    final name = _activeProfile?.displayLabel ?? 'Explorador';
++
++    final missions = <_MissionCardData>[
++      _MissionCardData(
++        title: 'Missão Foco',
++        subtitle: 'Ache o alvo e ignore distrações.',
++        icon: Icons.star_rounded,
++        background: const Color(0xFFEAF0FF),
++        foreground: const Color(0xFF4664D8),
++        onTap: () => _openGame((id) => G01FocusScreen(services: widget.services, profileId: id)),
++      ),
++      _MissionCardData(
++        title: 'Pare, Pense, Vá!',
++        subtitle: 'Toque no VÁ e segure a vontade no PARE.',
++        icon: Icons.pan_tool_alt_rounded,
++        background: const Color(0xFFE8F7EE),
++        foreground: const Color(0xFF2F8B50),
++        onTap: () => _openGame((id) => G02InhibitionScreen(services: widget.services, profileId: id)),
++      ),
++      _MissionCardData(
++        title: 'Memória Mágica',
++        subtitle: 'Guarde a sequência e repita na mesma ordem.',
++        icon: Icons.auto_awesome_rounded,
++        background: const Color(0xFFFFF4DD),
++        foreground: const Color(0xFFD38A21),
++        onTap: () => _openGame((id) => G03MemoryScreen(services: widget.services, profileId: id)),
++      ),
++      _MissionCardData(
++        title: 'Troca-Troca',
++        subtitle: 'Mude a resposta quando a regra mudar.',
++        icon: Icons.swap_horiz_rounded,
++        background: const Color(0xFFF2EAFE),
++        foreground: const Color(0xFF7952B7),
++        onTap: () => _openGame((id) => G04FlexibilityScreen(services: widget.services, profileId: id)),
++      ),
++      _MissionCardData(
++        title: 'Montanha da Calma',
++        subtitle: 'Pratique ferramentas de pausa e autorregulação.',

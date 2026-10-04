@@ -1,0 +1,364 @@
+-    return ((hit * 0.70) + ((1 - errors) * 0.20) + ((1 - omissions) * 0.10)) *
+-        100;
++    final hit = f.hitRate.clamp(0.0, 1.0);
++    final errors = f.commissionRate.clamp(0.0, 1.0);
++    final omissions = f.omissionRate.clamp(0.0, 1.0);
++    return ((hit * 0.70) + ((1 - errors) * 0.20) + ((1 - omissions) * 0.10)) * 100;
+   }
+ 
+   double _ewma(double? previous, double current) {
+     const alpha = 0.35;
+-    return previous == null
+-        ? current
+-        : (alpha * current) + ((1 - alpha) * previous);
+-  }
+-
+-  String _trend(List<SessionFeatureVectorV1> ordered) {
+-    if (ordered.length < 4) return 'insufficient_data';
+-    final n = ordered.length >= 6 ? 3 : 2;
+-    final recent = ordered.sublist(ordered.length - n);
+-    final start = (ordered.length - (n * 2)).clamp(0, ordered.length).toInt();
+-    final prior = ordered.sublist(start, ordered.length - n);
+-    if (prior.isEmpty) return 'insufficient_data';
+-    final delta = _meanOverall(recent) - _meanOverall(prior);
+-    if (delta >= 5) return 'improving';
+-    if (delta <= -5) return 'declining';
+-    return 'stable';
+-  }
+-
+-  double _meanOverall(List<SessionFeatureVectorV1> v) {
+-    var sum = 0.0;
+-    for (final f in v) {
+-      sum +=
+-          (_accuracyScore(f) + (1 - f.reactionTimeCv.clamp(0.0, 1.0)) * 100) /
+-          2;
+-    }
+-    return sum / v.length;
++    return previous == null ? current : (alpha * current) + ((1 - alpha) * previous);
+   }
+ 
+   double _clamp100(double value) => value.clamp(0.0, 100.0).toDouble();
+diff -ruN '--exclude=*.orig' '--exclude=assets' nc_v19_base/lib/features/g01_focus/g01_screen.dart nc_v21_work/src/lib/features/g01_focus/g01_screen.dart
+--- nc_v19_base/lib/features/g01_focus/g01_screen.dart	2026-08-21 16:51:41.000000000 +0000
++++ nc_v21_work/src/lib/features/g01_focus/g01_screen.dart	2026-10-04 00:53:41.456603669 +0000
+@@ -44,19 +44,14 @@
+   int _blockIndex = 0;
+   int _trialIndex = 0;
+   bool _resolved = false;
+-  bool _starting = true;
++  bool _instruction = true;
++  bool _starting = false;
+   bool _microPause = false;
+   bool _completed = false;
+   bool _closing = false;
+   String _feedback = '';
+ 
+   @override
+-  void initState() {
+-    super.initState();
+-    WidgetsBinding.instance.addPostFrameCallback((_) => _startSession());
+-  }
+-
+-  @override
+   void dispose() {
+     _trialTimer?.cancel();
+     if (!_completed && !_closing) {
+@@ -66,6 +61,8 @@
+   }
+ 
+   Future<void> _startSession() async {
++    if (_starting || _sessionId != null) return;
++    setState(() => _starting = true);
+     final sessionId = await widget.services.repository.startSession(
+       profileId: widget.profileId,
+       gameId: _gameId,
+@@ -88,7 +85,10 @@
+     if (!mounted) {
+       return;
+     }
+-    setState(() => _starting = false);
++    setState(() {
++      _starting = false;
++      _instruction = false;
++    });
+     await _startBlock();
+   }
+ 
+@@ -385,6 +385,9 @@
+ 
+   @override
+   Widget build(BuildContext context) {
++    if (_instruction) {
++      return _FocusInstructionView(starting: _starting, onStart: _startSession);
++    }
+     if (_starting) {
+       return const Scaffold(
+         body: SafeArea(child: Center(child: CircularProgressIndicator())),
+@@ -489,6 +492,107 @@
+   }
+ }
+ 
++
++class _FocusInstructionView extends StatelessWidget {
++  const _FocusInstructionView({required this.starting, required this.onStart});
++
++  final bool starting;
++  final VoidCallback onStart;
++
++  @override
++  Widget build(BuildContext context) {
++    return Scaffold(
++      appBar: AppBar(),
++      body: SafeArea(
++        child: ListView(
++          padding: const EdgeInsets.all(26),
++          children: [
++            const SizedBox(height: 12),
++            const Text(
++              'Missão Foco',
++              textAlign: TextAlign.center,
++              style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900),
++            ),
++            const SizedBox(height: 10),
++            const Text(
++              'Seu alvo é a estrela azul.',
++              textAlign: TextAlign.center,
++              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
++            ),
++            const SizedBox(height: 24),
++            Center(
++              child: Container(
++                width: 150,
++                height: 150,
++                decoration: BoxDecoration(
++                  color: const Color(0xFFEAF0FF),
++                  borderRadius: BorderRadius.circular(34),
++                ),
++                child: const Icon(Icons.star_rounded, size: 92, color: Color(0xFF2F63D8)),
++              ),
++            ),
++            const SizedBox(height: 24),
++            const _FocusRule(
++              icon: Icons.touch_app_rounded,
++              title: 'Se a estrela azul aparecer',
++              text: 'toque nela uma vez.',
++            ),
++            const SizedBox(height: 12),
++            const _FocusRule(
++              icon: Icons.hourglass_empty_rounded,
++              title: 'Se ela não aparecer',
++              text: 'não toque em nada e espere a próxima tela.',
++            ),
++            const SizedBox(height: 12),
++            const _FocusRule(
++              icon: Icons.visibility_rounded,
++              title: 'Ignore as distrações',
++              text: 'outras formas e cores podem parecer com o alvo.',
++            ),
++            const SizedBox(height: 26),
++            FilledButton.icon(
++              onPressed: starting ? null : onStart,
++              icon: const Icon(Icons.play_arrow_rounded),
++              label: Text(starting ? 'Preparando…' : 'Começar missão'),
++            ),
++          ],
++        ),
++      ),
++    );
++  }
++}
++
++class _FocusRule extends StatelessWidget {
++  const _FocusRule({required this.icon, required this.title, required this.text});
++  final IconData icon;
++  final String title;
++  final String text;
++  @override
++  Widget build(BuildContext context) => Container(
++    padding: const EdgeInsets.all(16),
++    decoration: BoxDecoration(
++      color: Theme.of(context).colorScheme.surfaceContainerLow,
++      borderRadius: BorderRadius.circular(20),
++    ),
++    child: Row(
++      children: [
++        Icon(icon, size: 32),
++        const SizedBox(width: 14),
++        Expanded(
++          child: Column(
++            crossAxisAlignment: CrossAxisAlignment.start,
++            children: [
++              Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
++              const SizedBox(height: 2),
++              Text(text),
++            ],
++          ),
++        ),
++      ],
++    ),
++  );
++}
++
+ class _StimulusGrid extends StatelessWidget {
+   const _StimulusGrid({
+     required this.trial,
+diff -ruN '--exclude=*.orig' '--exclude=assets' nc_v19_base/lib/features/g05_regulation/g05_screen.dart nc_v21_work/src/lib/features/g05_regulation/g05_screen.dart
+--- nc_v19_base/lib/features/g05_regulation/g05_screen.dart	2026-08-21 16:51:44.000000000 +0000
++++ nc_v21_work/src/lib/features/g05_regulation/g05_screen.dart	2026-10-04 00:54:52.194500698 +0000
+@@ -15,6 +15,7 @@
+     required this.profileId,
+     super.key,
+   });
++
+   final AppServices services;
+   final String profileId;
+ 
+@@ -22,13 +23,21 @@
+   State<G05RegulationScreen> createState() => _G05RegulationScreenState();
+ }
+ 
++enum _RegulationTool { breathe, hands, senses, pauseChoose }
++
++class _GuidedStep {
++  const _GuidedStep(this.text, this.seconds);
++  final String text;
++  final int seconds;
++}
++
+ class _G05RegulationScreenState extends State<G05RegulationScreen> {
+   static const _gameId = 'G05_montanha_calma';
+-  static const _strategies = <String>[
+-    'Respirar devagar',
+-    'Pausar e observar',
+-    'Alongar as mãos',
+-    'Escolher um pensamento gentil',
++  static const _tools = <_RegulationTool>[
++    _RegulationTool.breathe,
++    _RegulationTool.hands,
++    _RegulationTool.senses,
++    _RegulationTool.pauseChoose,
+   ];
+ 
+   final _engine = const RegulationAdaptiveEngine();
+@@ -40,11 +49,16 @@
+   int _premature = 0;
+   int _omissions = 0;
+   final List<int> _times = [];
+-  DateTime? _started;
++  DateTime? _roundStarted;
+   bool _done = false;
+   bool _busy = false;
+   bool _closing = false;
+-  String _feedback = 'Suba a montanha no seu ritmo.';
++  _RegulationTool? _activeTool;
++  String _guideText = '';
++  int _guideSeconds = 0;
++  int _guideStep = 0;
++  int _guideTotalSteps = 0;
++  String _feedback = 'Escolha uma ferramenta para praticar.';
+ 
+   @override
+   void dispose() {
+@@ -55,13 +69,13 @@
+     super.dispose();
+   }
+ 
+-  List<String> _visibleStrategies(RegulationDifficultyConfig config) {
+-    final start = (_round - 1).clamp(0, 1000) % _strategies.length;
+-    final rotated = <String>[
+-      for (var i = 0; i < _strategies.length; i += 1)
+-        _strategies[(start + i) % _strategies.length],
++  List<_RegulationTool> _visibleTools(RegulationDifficultyConfig config) {
++    final start = (_round - 1).clamp(0, 1000) % _tools.length;
++    final rotated = <_RegulationTool>[
++      for (var i = 0; i < _tools.length; i += 1)
++        _tools[(start + i) % _tools.length],
+     ];
+-    return rotated.take(config.choiceCount).toList();
++    return rotated.take(config.choiceCount.clamp(2, _tools.length)).toList();
+   }
+ 
+   Future<void> _start() async {
+@@ -72,14 +86,16 @@
+     );
+     await _record('session_started', {
+       'game_id': _gameId,
+-      'mode': 'neuroeducational_non_diagnostic',
++      'mode': 'guided_self_regulation_practice_non_diagnostic',
++      'guided_practice_enabled': true,
+       'omission_timeout_enabled': true,
+     });
+     await widget.services.feedback.start();
+     if (!mounted) return;
+     setState(() {
+       _round = 1;
+-      _started = DateTime.now();
++      _roundStarted = DateTime.now();
++      _feedback = 'Escolha uma ferramenta para praticar.';
+     });
+     _armRoundTimer();
+   }
+@@ -93,49 +109,109 @@
+     );
+   }
+ 
+-  Future<void> _choose(String strategy) async {
+-    if (_busy || _done || _sessionId == null) return;
++  Future<void> _choose(_RegulationTool tool) async {
++    if (_busy || _done || _sessionId == null || _activeTool != null) return;
+     _busy = true;
+     _roundTimer?.cancel();
+-    final elapsed = DateTime.now()
+-        .difference(_started ?? DateTime.now())
++    final selectedAt = DateTime.now();
++    final selectionTime = selectedAt
++        .difference(_roundStarted ?? selectedAt)
+         .inMilliseconds;
+-    final config = RegulationDifficultyConfig.forLevel(_state.level);
+-    if (elapsed < 500) _premature++;
++    if (selectionTime < 500) _premature++;
++
++    await _record('regulation_tool_selected', {
++      'round': _round,
++      'tool': tool.name,
++      'selection_time_ms': selectionTime,
++      'difficulty': _state.level,
++    });
++
++    if (!mounted) return;
++    setState(() {
++      _activeTool = tool;
++      _feedback = 'Siga o guia no seu ritmo.';
++    });
++
++    final started = DateTime.now();
++    await _runGuidedPractice(tool);
++    final completionTime = DateTime.now().difference(started).inMilliseconds;
+     _completed++;
+-    _times.add(elapsed);
+-    await _record('regulation_strategy_completed', {
++    _times.add(completionTime);
++
++    await _record('regulation_guided_practice_completed', {
+       'round': _round,
+-      'strategy': strategy,
+-      'completion_time_ms': elapsed,
++      'tool': tool.name,
++      'completion_time_ms': completionTime,
++      'guided_steps': _stepsFor(tool).length,
+       'difficulty': _state.level,
+     });
+     await widget.services.feedback.correct();
+     if (!mounted) return;
+-    setState(
+-      () => _feedback =
+-          'Boa escolha. Agora siga o ritmo por ${config.pacingSeconds} segundos.',
+-    );
+-    await Future<void>.delayed(Duration(seconds: config.pacingSeconds));
++    setState(() {
++      _activeTool = null;
++      _guideText = '';
++      _guideSeconds = 0;
++      _feedback = 'Prática concluída. Vamos subir mais um trecho!';
++    });
++    await Future<void>.delayed(const Duration(milliseconds: 650));

@@ -1,0 +1,202 @@
+name: NeuroCore Android Validation
+on:
+  push:
+    branches: [neurocore-local-v1-7-validation]
+    paths: ['neurocore/**','.github/workflows/neurocore-android-validation.yml']
+  pull_request:
+    branches: [main]
+    paths: ['neurocore/**','.github/workflows/neurocore-android-validation.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+env:
+  SOURCE_SHA256: '0aa63928c44bbacc142db6449abb51abfb91de3bb00d92e07211a465ea39aaf2'
+  V20_PATCH_GZ_SHA256: '52071cb9f30b696cadc23f72b0c171b95617501fe1f6ebf11d25659b929590f8'
+jobs:
+  validate-android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reconstruct validated baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat neurocore/ci/source_chunks/chunk_00.b64 neurocore/ci/source_chunks/chunk_01.b64 neurocore/ci/source_chunks/chunk_02.b64 neurocore/ci/source_chunks/chunk_03.b64 neurocore/ci/source_chunks/chunk_04.b64 neurocore/ci/source_chunks/chunk_05_00.b64 neurocore/ci/source_chunks/chunk_05_01.b64 neurocore/ci/source_chunks/chunk_05_02.b64 neurocore/ci/source_chunks/chunk_05_03.b64 neurocore/ci/source_chunks/chunk_06_00.b64 neurocore/ci/source_chunks/chunk_06_01.b64 neurocore/ci/source_chunks/chunk_06_02.b64 neurocore/ci/source_chunks/chunk_06_03.b64 neurocore/ci/source_chunks/chunk_07.b64 > /tmp/source.b64
+          base64 --decode /tmp/source.b64 > /tmp/source.tar.gz
+          echo "${SOURCE_SHA256}  /tmp/source.tar.gz" | sha256sum --check --strict
+          mkdir -p neurocore/ci/app
+          tar -xzf /tmp/source.tar.gz -C neurocore/ci/app
+          python3 - <<'PY'
+          from pathlib import Path
+          root=Path('neurocore/ci/app')
+          p=root/'pubspec.yaml'
+          s=p.read_text().replace('flutter_secure_storage: ^11.0.0','flutter_secure_storage: 10.3.1')
+          p.write_text('\n'.join(x for x in s.splitlines() if not x.strip().startswith('cryptography_flutter:'))+'\n')
+          m=root/'lib/main.dart'
+          s=m.read_text().replace("import 'package:cryptography_flutter/cryptography_flutter.dart';\n",'').replace('  FlutterCryptography.enable();\n','').replace('FlutterCryptography.enable();\n','')
+          m.write_text(s)
+          PY
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.0'
+          channel: stable
+          cache: true
+
+      - name: Generate hardened Android wrapper and normalize baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/nc
+          flutter create --org br.com.neurocore --project-name neurocore_app --platforms=android /tmp/nc
+          cp -a /tmp/nc/android neurocore/ci/app/android
+          python3 - <<'PY'
+          from pathlib import Path
+          root=Path('neurocore/ci/app')
+          k=root/'android/app/build.gradle.kts'
+          k.write_text(k.read_text().replace('minSdk = flutter.minSdkVersion','minSdk = 24').replace('minSdk = 23','minSdk = 24'))
+          m=root/'android/app/src/main/AndroidManifest.xml'
+          m.write_text(m.read_text().replace('<application','<application android:allowBackup="false" android:usesCleartextTraffic="false"',1))
+          PY
+          cd neurocore/ci/app
+          flutter pub get
+          dart fix --apply
+          python3 - <<'PY'
+          from pathlib import Path
+          c=Path('lib/core/security/crypto_box.dart')
+          s=c.read_text().replace('const FlutterSecureStorage _secureStorage = FlutterSecureStorage();','final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();').replace('const FlutterSecureStorage _secureStorage = const FlutterSecureStorage();','final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();')
+          c.write_text(s)
+          m=Path('lib/main.dart')
+          s=m.read_text().replace("import 'package:cryptography_flutter/cryptography_flutter.dart';\n",'').replace('  FlutterCryptography.enable();\n','').replace('FlutterCryptography.enable();\n','')
+          m.write_text(s)
+          p=Path('pubspec.yaml')
+          p.write_text('\n'.join(x for x in p.read_text().splitlines() if not x.strip().startswith('cryptography_flutter:'))+'\n')
+          PY
+          dart format lib test
+          flutter pub get
+
+      - name: Reapply validated V1.9 gameplay audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat neurocore/ci/v1_9_patch/part_*.patch > /tmp/v19.patch
+          cd neurocore/ci/app
+          set +e
+          patch -p1 --batch --forward < /tmp/v19.patch
+          STATUS=$?
+          set -e
+          REJECTS=$(find . -name '*.rej' -print)
+          if [ -n "$REJECTS" ]; then
+            BAD=$(echo "$REJECTS" | grep -v '^./lib/features/g06_social/g06_screen.dart.rej$' || true)
+            test -z "$BAD"
+          elif [ "$STATUS" -ne 0 ]; then exit 1; fi
+          cd ../../..
+          cp -a neurocore/ci/v1_9_overlay/. neurocore/ci/app/
+          cd neurocore/ci/app
+          rm -f lib/features/g06_social/g06_screen.dart.rej
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('pubspec.yaml'); p.write_text(p.read_text().replace('version: 1.7.0+17','version: 1.9.0+19').replace('NeuroCore V1.7 FINAL RC2','NeuroCore V1.9 AUDITED'))
+          h=Path('lib/features/home/home_screen.dart'); h.write_text(h.read_text().replace('V1.7 FINAL RC2 • local • 6 jogos • acessível • privacidade • sessão selada • ML shadow/fail-closed','V1.9 AUDITED • 6 jogos • VÁ/PARE balanceado • sons/háptica • mais variedade visual • privacidade • ML shadow/fail-closed'))
+          PY
+          dart fix --apply
+          dart format lib test
+          flutter pub get
+
+      - name: Reconstruct and apply V2.0 parent/evidence audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat neurocore/ci/v2_0_chunks/part_*.b64 > /tmp/v20.b64
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('/tmp/v20.b64')
+          s=p.read_text()
+          old='xRxW6/hnVhWSe'
+          new='xRxW6/hn/VhWSe'
+          if s.count(old) != 1:
+              raise SystemExit(f'expected one transport defect, found {s.count(old)}')
+          p.write_text(s.replace(old,new))
+          PY
+          base64 --decode /tmp/v20.b64 > /tmp/v20.patch.gz
+          echo "${V20_PATCH_GZ_SHA256}  /tmp/v20.patch.gz" | sha256sum --check --strict
+          gzip -dc /tmp/v20.patch.gz > /tmp/v20.patch
+          cd neurocore/ci/app
+          patch -p4 --batch --forward < /tmp/v20.patch
+          mkdir -p assets/audio
+          python3 - <<'PY'
+          import math,struct,wave
+          from pathlib import Path
+          out=Path('assets/audio'); rate=22050
+          specs={'start.wav':([523.25,659.25],.18,.22),'correct.wav':([659.25,783.99,1046.50],.24,.24),'gentle_miss.wav':([440.,392.],.16,.18),'complete.wav':([523.25,659.25,783.99,1046.50],.32,.24)}
+          for name,(freqs,duration,amp) in specs.items():
+              frames=[]
+              for i in range(int(rate*duration)):
+                  t=i/rate; pos=t/duration; env=min(1.,pos/.08,(1-pos)/.18 if pos>.82 else 1.)
+                  tone=sum(math.sin(2*math.pi*f*t) for f in freqs)/len(freqs)
+                  frames.append(struct.pack('<h',int(32767*amp*max(0,env)*tone)))
+              with wave.open(str(out/name),'wb') as w:
+                  w.setnchannels(1); w.setsampwidth(2); w.setframerate(rate); w.writeframes(b''.join(frames))
+          PY
+          dart fix --apply
+          dart format lib test
+          flutter pub get
+          grep -q '^version: 2.0.0+20' pubspec.yaml
+          grep -q 'audioplayers:' pubspec.yaml
+          grep -q "recommendedAge = '6 a 11 anos'" lib/core/product/product_info.dart
+          grep -q 'domain.length < 3' lib/core/profile/neuro_profile_aggregator.dart
+          grep -q 'supportiveIndices' lib/features/g06_social/social_scenario.dart
+          grep -q 'non_supportive_choice_rate' lib/ml/feature_contract.dart
+          test -f lib/features/parent/parent_guide_screen.dart
+          test -f test/v20_parent_evidence_audit_test.dart
+          for f in assets/audio/start.wav assets/audio/correct.wav assets/audio/gentle_miss.wav assets/audio/complete.wav; do test -s "$f"; done
+          ! grep -R -q 'Indicador global de gameplay' lib
+          ! grep -E -q 'google_mobile_ads|firebase_analytics|facebook_app_events|amplitude_flutter|mixpanel_flutter|geolocator|app_tracking_transparency' pubspec.yaml
+
+      - name: Flutter analyze strict
+        working-directory: neurocore/ci/app
+        run: flutter analyze
+
+      - name: Flutter tests complete
+        working-directory: neurocore/ci/app
+        run: flutter test --reporter expanded
+
+      - name: Android APK
+        working-directory: neurocore/ci/app
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter build apk --debug 2>&1 | tee /tmp/build.log
+          ! grep -q 'plugins that apply Kotlin Gradle Plugin' /tmp/build.log
+
+      - name: Create V2.0 evidence
+        working-directory: neurocore/ci/app
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=build/app/outputs/flutter-apk/app-debug.apk
+          test -s "$APK"
+          APK_SHA=$(sha256sum "$APK" | awk '{print $1}')
+          TEST_FILES=$(find test -maxdepth 1 -name '*_test.dart' | wc -l)
+          tar -czf neurocore_v2_0_source.tar.gz pubspec.yaml pubspec.lock analysis_options.yaml lib test android assets
+          SOURCE_SHA=$(sha256sum neurocore_v2_0_source.tar.gz | awk '{print $1}')
+          python3 - "$APK_SHA" "$SOURCE_SHA" "$TEST_FILES" <<'PY'
+          import json,sys
+          data={'version':'2.0.0+20','flutter_analyze_strict':'pass','flutter_tests':'pass','test_files':int(sys.argv[3]),'apk_build':'pass','recommended_age':'6-11','parent_guide':'pass','domain_min_same_game_sessions':3,'cross_game_global_score':'removed_from_parent_output','g02_pare_guaranteed':'pass','g02_max_consecutive_va':3,'g06_multiple_supportive_choices':'pass','g06_non_supportive_metric':'pass','audio_assets':'4_local_wav','clinical_positioning':'neuroeducational_non_diagnostic_non_treatment','third_party_ads_analytics':'absent','internationalization':'planned_not_yet_implemented','apk_sha256':sys.argv[1],'source_sha256':sys.argv[2]}
+          open('neurocore_v2_0_evidence.json','w').write(json.dumps(data,indent=2,ensure_ascii=False)+'\n')
+          PY
+          cat neurocore_v2_0_evidence.json
+
+      - name: Upload V2.0 audited APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: neurocore-v2.0-parent-evidence-audited-android
+          path: |
+            neurocore/ci/app/build/app/outputs/flutter-apk/app-debug.apk
+            neurocore/ci/app/neurocore_v2_0_evidence.json
+            neurocore/ci/app/neurocore_v2_0_source.tar.gz
+            neurocore/ci/app/pubspec.lock
+          if-no-files-found: error
+          retention-days: 14

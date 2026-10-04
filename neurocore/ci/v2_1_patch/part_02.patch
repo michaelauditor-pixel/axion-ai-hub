@@ -1,0 +1,308 @@
+     _busy = false;
+     await _advance();
+   }
+ 
++  Future<void> _runGuidedPractice(_RegulationTool tool) async {
++    final steps = _stepsFor(tool);
++    _guideTotalSteps = steps.length;
++    for (var i = 0; i < steps.length; i++) {
++      final step = steps[i];
++      if (!mounted || _done) return;
++      setState(() {
++        _guideStep = i + 1;
++        _guideText = step.text;
++        _guideSeconds = step.seconds;
++      });
++      for (var second = step.seconds; second > 0; second--) {
++        if (!mounted || _done) return;
++        setState(() => _guideSeconds = second);
++        await Future<void>.delayed(const Duration(seconds: 1));
++      }
++    }
++  }
++
++  List<_GuidedStep> _stepsFor(_RegulationTool tool) => switch (tool) {
++    _RegulationTool.breathe => const [
++      _GuidedStep('Puxe o ar devagar pelo nariz.', 3),
++      _GuidedStep('Solte o ar bem devagar.', 4),
++      _GuidedStep('Mais uma vez: puxe o ar devagar.', 3),
++      _GuidedStep('Agora solte o ar com calma.', 4),
++    ],
++    _RegulationTool.hands => const [
++      _GuidedStep('Feche as mãos de leve. Sem machucar.', 3),
++      _GuidedStep('Agora solte as mãos e perceba a diferença.', 4),
++      _GuidedStep('Mexa os dedos bem devagar.', 3),
++    ],
++    _RegulationTool.senses => const [
++      _GuidedStep('Olhe ao redor e encontre 3 coisas que você consegue ver.', 5),
++      _GuidedStep('Escute e perceba 2 sons ao seu redor.', 5),
++      _GuidedStep('Perceba 1 ponto do corpo encostando em algo.', 4),
++    ],
++    _RegulationTool.pauseChoose => const [
++      _GuidedStep('Pare por um instante.', 3),
++      _GuidedStep('Pense em duas maneiras seguras de continuar.', 5),
++      _GuidedStep('Escolha uma próxima ação calma e possível.', 4),
++    ],
++  };
++
+   Future<void> _handleOmission() async {
+-    if (_busy || _done || _sessionId == null) return;
++    if (_busy || _done || _sessionId == null || _activeTool != null) return;
+     _busy = true;
+     _omissions += 1;
+     await _record('regulation_prompt_omitted', {
+       'round': _round,
+       'difficulty': _state.level,
+     });
+-    await widget.services.feedback.gentleMiss();
+     if (!mounted) return;
+-    setState(
+-      () => _feedback =
+-          'Sem problema. Esta parada passou e vamos seguir para a próxima.',
+-    );
+-    await Future<void>.delayed(const Duration(milliseconds: 750));
++    setState(() => _feedback = 'Tudo bem. Vamos para a próxima parada.');
++    await Future<void>.delayed(const Duration(milliseconds: 700));
+     _busy = false;
+     await _advance();
+   }
+@@ -165,8 +241,8 @@
+     if (!mounted) return;
+     setState(() {
+       _round++;
+-      _started = DateTime.now();
+-      _feedback = 'Escolha uma estratégia e experimente.';
++      _roundStarted = DateTime.now();
++      _feedback = 'Escolha uma ferramenta para praticar.';
+     });
+     _armRoundTimer();
+   }
+@@ -185,6 +261,7 @@
+       'blocks_completed': 3,
+       'final_difficulty': _state.level,
+       'performance': snapshot.toJson(),
++      'guided_practice': true,
+       'note': 'practice_metric_not_emotion_diagnosis',
+     };
+     final features = widget.services.neuroProfile.buildCompletedG05(
+@@ -199,8 +276,7 @@
+     );
+     _done = true;
+     await widget.services.feedback.complete();
+-    if (!mounted) return;
+-    setState(() {});
++    if (mounted) setState(() {});
+   }
+ 
+   Future<void> _record(String type, Map<String, Object?> payload) async {
+@@ -225,116 +301,52 @@
+         payload: {'round': _round},
+       );
+       await widget.services.repository.abandonSession(sessionId: id);
+-    } catch (_) {
+-      // Dispose deve permanecer silencioso.
+-    }
++    } catch (_) {}
+   }
+ 
+   @override
+   Widget build(BuildContext context) {
+     final config = RegulationDifficultyConfig.forLevel(_state.level);
+     return Scaffold(
+-      appBar: AppBar(title: const Text('G05 • Montanha da Calma')),
++      appBar: AppBar(title: const Text('Montanha da Calma')),
+       body: SafeArea(
+         child: Padding(
+-          padding: const EdgeInsets.all(24),
++          padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+           child: _done
+-              ? Center(
+-                  child: Column(
+-                    mainAxisSize: MainAxisSize.min,
+-                    children: [
+-                      const GameVisualStrip(
+-                        kind: GameVisualKind.regulation,
+-                        height: 122,
+-                      ),
+-                      const SizedBox(height: 16),
+-                      const Text(
+-                        'Montanha concluída!',
+-                        style: TextStyle(
+-                          fontSize: 28,
+-                          fontWeight: FontWeight.w900,
+-                        ),
+-                      ),
+-                      const SizedBox(height: 12),
+-                      const Text(
+-                        'Você praticou pausas e escolhas de autorregulação no jogo.',
+-                        textAlign: TextAlign.center,
+-                      ),
+-                      const SizedBox(height: 24),
+-                      FilledButton(
+-                        onPressed: () => Navigator.of(context).pop(),
+-                        child: const Text('Voltar'),
+-                      ),
+-                    ],
+-                  ),
+-                )
++              ? _Completion(onDone: () => Navigator.of(context).pop())
+               : _sessionId == null
+-              ? Center(
+-                  child: Column(
+-                    mainAxisSize: MainAxisSize.min,
+-                    children: [
+-                      const GameVisualStrip(
+-                        kind: GameVisualKind.regulation,
+-                        height: 130,
+-                      ),
+-                      const SizedBox(height: 22),
+-                      FilledButton.icon(
+-                        onPressed: _start,
+-                        icon: const Icon(Icons.play_arrow_rounded),
+-                        label: const Text('Começar subida'),
+-                      ),
+-                    ],
+-                  ),
+-                )
++              ? _Intro(onStart: _start)
+               : Column(
+                   crossAxisAlignment: CrossAxisAlignment.stretch,
+                   children: [
+                     LinearProgressIndicator(value: _round / 6),
+-                    const SizedBox(height: 20),
++                    const SizedBox(height: 12),
+                     Text(
+-                      'Parada $_round de 6 • nível ${_state.level}',
++                      'Parada $_round de 6',
+                       style: const TextStyle(fontWeight: FontWeight.w800),
+                     ),
+-                    const SizedBox(height: 18),
+-                    const GameVisualStrip(
+-                      kind: GameVisualKind.regulation,
+-                      height: 104,
+-                    ),
+                     const SizedBox(height: 14),
+-                    Container(
+-                      padding: const EdgeInsets.all(20),
+-                      decoration: BoxDecoration(
+-                        color: const Color(0xFFEAF8F2),
+-                        borderRadius: BorderRadius.circular(24),
+-                      ),
+-                      child: Text(
+-                        _feedback,
+-                        textAlign: TextAlign.center,
+-                        style: const TextStyle(
+-                          fontSize: 21,
+-                          fontWeight: FontWeight.w800,
+-                        ),
++                    Expanded(
++                      child: AnimatedSwitcher(
++                        duration: const Duration(milliseconds: 220),
++                        child: _activeTool == null
++                            ? _ToolChooser(
++                                key: const ValueKey('chooser'),
++                                tools: _visibleTools(config),
++                                feedback: _feedback,
++                                enabled: !_busy,
++                                onChoose: _choose,
++                              )
++                            : _GuidedPractice(
++                                key: ValueKey(_activeTool),
++                                tool: _activeTool!,
++                                text: _guideText,
++                                seconds: _guideSeconds,
++                                step: _guideStep,
++                                totalSteps: _guideTotalSteps,
++                              ),
+                       ),
+                     ),
+-                    const SizedBox(height: 20),
+-                    ..._visibleStrategies(config).map(
+-                      (strategy) => Padding(
+-                        padding: const EdgeInsets.only(bottom: 12),
+-                        child: FilledButton.tonal(
+-                          onPressed: _busy ? null : () => _choose(strategy),
+-                          child: Padding(
+-                            padding: const EdgeInsets.all(14),
+-                            child: Text(strategy),
+-                          ),
+-                        ),
+-                      ),
+-                    ),
+-                    const Spacer(),
+-                    const Text(
+-                      'Este módulo pratica estratégias no jogo e não mede nem diagnostica emoções, crises ou agressividade.',
+-                      textAlign: TextAlign.center,
+-                      style: TextStyle(fontSize: 12),
+-                    ),
+                   ],
+                 ),
+         ),
+@@ -342,3 +354,175 @@
+     );
+   }
+ }
++
++class _Intro extends StatelessWidget {
++  const _Intro({required this.onStart});
++  final VoidCallback onStart;
++  @override
++  Widget build(BuildContext context) => ListView(
++    children: [
++      const SizedBox(height: 20),
++      const GameVisualStrip(kind: GameVisualKind.regulation, height: 130),
++      const SizedBox(height: 20),
++      const Text(
++        'Montanha da Calma',
++        textAlign: TextAlign.center,
++        style: TextStyle(fontSize: 31, fontWeight: FontWeight.w900),
++      ),
++      const SizedBox(height: 12),
++      const Text(
++        'Em cada parada você vai escolher uma ferramenta e praticá-la de verdade com um guia passo a passo. Não existe ferramenta “certa” para todo momento.',
++        textAlign: TextAlign.center,
++        style: TextStyle(fontSize: 17, height: 1.45),
++      ),
++      const SizedBox(height: 18),
++      const _ToolPreview(icon: Icons.air_rounded, title: 'Respiração lenta'),
++      const _ToolPreview(icon: Icons.back_hand_rounded, title: 'Mãos fortes, mãos soltas'),
++      const _ToolPreview(icon: Icons.visibility_rounded, title: '3–2–1 dos sentidos'),
++      const _ToolPreview(icon: Icons.alt_route_rounded, title: 'Pausa e escolha'),
++      const SizedBox(height: 22),
++      FilledButton.icon(
++        onPressed: onStart,
++        icon: const Icon(Icons.play_arrow_rounded),
++        label: const Text('Começar a subida'),
++      ),
++    ],
++  );
++}
++
++class _ToolPreview extends StatelessWidget {
++  const _ToolPreview({required this.icon, required this.title});
++  final IconData icon;
++  final String title;
++  @override
++  Widget build(BuildContext context) => Padding(
++    padding: const EdgeInsets.only(bottom: 8),
++    child: Container(
++      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
++      decoration: BoxDecoration(
++        color: const Color(0xFFEAF8F2),
++        borderRadius: BorderRadius.circular(18),
++      ),
++      child: Row(children: [Icon(icon), const SizedBox(width: 12), Expanded(child: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)))]),
++    ),
++  );
++}
++
++class _ToolChooser extends StatelessWidget {
++  const _ToolChooser({
++    required this.tools,
++    required this.feedback,
++    required this.enabled,
++    required this.onChoose,
++    super.key,
++  });
++  final List<_RegulationTool> tools;
++  final String feedback;

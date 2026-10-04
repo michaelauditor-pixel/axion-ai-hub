@@ -1,0 +1,175 @@
+     final previousLevel = _adaptiveState.level;
+@@ -281,6 +303,7 @@
+     );
+ 
+     _completed = true;
++    await widget.services.feedback.complete();
+     if (mounted) setState(() {});
+   }
+ 
+@@ -453,7 +476,8 @@
+           padding: const EdgeInsets.all(28),
+           children: [
+             const SizedBox(height: 20),
+-            const Icon(Icons.pan_tool_alt_rounded, size: 72),
++            const GameVisualStrip(kind: GameVisualKind.inhibition, height: 118),
++            const SizedBox(height: 18),
+             const SizedBox(height: 20),
+             const Text(
+               'Pare, Pense, Vá!',
+diff -ruN source_before/lib/features/g02_inhibition/inhibition_trial.dart source_after/lib/features/g02_inhibition/inhibition_trial.dart
+--- source_before/lib/features/g02_inhibition/inhibition_trial.dart	2026-08-21 13:15:46.000000000 +0000
++++ source_after/lib/features/g02_inhibition/inhibition_trial.dart	2026-08-21 14:42:14.159589866 +0000
+@@ -20,8 +20,97 @@
+ 
+   final Random _random;
+ 
+-  InhibitionTrial generate(InhibitionDifficultyConfig config) {
+-    final isGo = _random.nextDouble() < config.goProbability;
+-    return InhibitionTrial(cue: isGo ? InhibitionCue.go : InhibitionCue.noGo);
++  /// Gera um bloco balanceado de Go/No-Go.
++  ///
++  /// Regras de segurança pedagógica:
++  /// - pelo menos 2 estímulos PARE por bloco de 10;
++  /// - respeita aproximadamente a probabilidade-alvo de VÁ do nível;
++  /// - nunca permite mais de [maxConsecutiveGo] estímulos VÁ consecutivos,
++  ///   inclusive considerando o final do bloco anterior.
++  List<InhibitionTrial> generateBlock(
++    InhibitionDifficultyConfig config,
++    int trialCount, {
++    int initialGoRun = 0,
++    int maxConsecutiveGo = 3,
++  }) {
++    if (trialCount < 3) {
++      throw ArgumentError.value(trialCount, 'trialCount', 'must be >= 3');
++    }
++
++    final desiredNoGo = ((1 - config.goProbability) * trialCount).round();
++    final minNoGo = trialCount >= 8 ? 2 : 1;
++    final noGoCount = desiredNoGo.clamp(minNoGo, trialCount - 1).toInt();
++    final goCount = trialCount - noGoCount;
++
++    final cues = <InhibitionCue>[
++      ...List<InhibitionCue>.filled(goCount, InhibitionCue.go),
++      ...List<InhibitionCue>.filled(noGoCount, InhibitionCue.noGo),
++    ];
++
++    for (var attempt = 0; attempt < 400; attempt += 1) {
++      cues.shuffle(_random);
++      if (_isValidSequence(
++        cues,
++        initialGoRun: initialGoRun,
++        maxConsecutiveGo: maxConsecutiveGo,
++      )) {
++        return cues.map((cue) => InhibitionTrial(cue: cue)).toList();
++      }
++    }
++
++    // Fallback determinístico: distribui PARE ao longo do bloco.
++    final result = <InhibitionCue>[];
++    var remainingGo = goCount;
++    var remainingNoGo = noGoCount;
++    var currentGoRun = initialGoRun;
++    while (remainingGo + remainingNoGo > 0) {
++      final mustStop = currentGoRun >= maxConsecutiveGo;
++      final canPlaceStop = remainingNoGo > 0;
++      final shouldStop = mustStop ||
++          (canPlaceStop && remainingGo > 0 &&
++              remainingNoGo / (remainingGo + remainingNoGo) >=
++                  _random.nextDouble());
++      if (shouldStop && canPlaceStop) {
++        result.add(InhibitionCue.noGo);
++        remainingNoGo -= 1;
++        currentGoRun = 0;
++      } else if (remainingGo > 0) {
++        result.add(InhibitionCue.go);
++        remainingGo -= 1;
++        currentGoRun += 1;
++      } else {
++        result.add(InhibitionCue.noGo);
++        remainingNoGo -= 1;
++        currentGoRun = 0;
++      }
++    }
++
++    return result.map((cue) => InhibitionTrial(cue: cue)).toList();
++  }
++
++  bool _isValidSequence(
++    List<InhibitionCue> cues, {
++    required int initialGoRun,
++    required int maxConsecutiveGo,
++  }) {
++    var goRun = initialGoRun;
++    for (final cue in cues) {
++      if (cue == InhibitionCue.go) {
++        goRun += 1;
++        if (goRun > maxConsecutiveGo) return false;
++      } else {
++        goRun = 0;
++      }
++    }
++    return true;
++  }
++
++  static int trailingGoRun(List<InhibitionTrial> trials) {
++    var run = 0;
++    for (final trial in trials.reversed) {
++      if (!trial.isGo) break;
++      run += 1;
++    }
++    return run;
+   }
+ }
+diff -ruN source_before/lib/features/g03_memory/g03_screen.dart source_after/lib/features/g03_memory/g03_screen.dart
+--- source_before/lib/features/g03_memory/g03_screen.dart	2026-08-21 13:15:46.000000000 +0000
++++ source_after/lib/features/g03_memory/g03_screen.dart	2026-08-21 14:45:33.828053638 +0000
+@@ -78,6 +78,7 @@
+       'blocks_planned': _blocksPerSession,
+       'trials_per_block': _trialsPerBlock,
+     });
++    await widget.services.feedback.start();
+     if (!mounted) return;
+     setState(() {
+       _instruction = false;
+@@ -218,7 +219,12 @@
+         }
+       }
+     }
+-    if (exact) _blockPerformance.correctTrials += 1;
++    if (exact) {
++      _blockPerformance.correctTrials += 1;
++      await widget.services.feedback.correct();
++    } else {
++      await widget.services.feedback.gentleMiss();
++    }
+ 
+     await _record('memory_trial_completed', {
+       'block': _blockIndex,
+@@ -349,6 +355,7 @@
+       features: features,
+     );
+     _completed = true;
++    await widget.services.feedback.complete();
+     if (mounted) setState(() {});
+   }
+ 
+diff -ruN source_before/lib/features/g04_flexibility/g04_screen.dart source_after/lib/features/g04_flexibility/g04_screen.dart
+--- source_before/lib/features/g04_flexibility/g04_screen.dart	2026-08-21 13:15:46.000000000 +0000
++++ source_after/lib/features/g04_flexibility/g04_screen.dart	2026-08-21 14:45:45.105512908 +0000
+@@ -74,6 +74,7 @@
+       'blocks_planned': _blocksPerSession,
+       'trials_per_block': _trialsPerBlock,
+     });
++    await widget.services.feedback.start();
+     if (!mounted) return;
+     setState(() {
+       _instruction = false;
+@@ -86,7 +87,7 @@
+     _blockPerformance = FlexibilityPerformanceAccumulator();
+     _trialIndex = 0;
+     _blockIndex += 1;
+-    _rule = FlexibilityRule.color;
++    _rule = _blockIndex.isOdd ? FlexibilityRule.color : FlexibilityRule.shape;
+     _previousRule = null;
+     final config = FlexibilityDifficultyConfig.forLevel(_adaptiveState.level);

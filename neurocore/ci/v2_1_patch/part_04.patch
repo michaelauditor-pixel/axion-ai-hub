@@ -1,0 +1,281 @@
+-      );
++    if (id != null) {
++      await widget.services.telemetry.record(sessionId: id, eventType: type, payload: payload);
++    }
+   }
+ 
+   Future<void> _abandonSilently() async {
+@@ -236,107 +230,122 @@
+ 
+   @override
+   Widget build(BuildContext context) {
+-    if (_done)
++    if (_done) {
+       return Scaffold(
+-        appBar: AppBar(title: const Text('G06 • Mundo dos Amigos')),
++        appBar: AppBar(title: const Text('Mundo dos Amigos')),
+         body: Center(
+-          child: Column(
+-            mainAxisSize: MainAxisSize.min,
+-            children: [
+-              const GameVisualStrip(kind: GameVisualKind.social, height: 125),
+-              const SizedBox(height: 16),
+-              const Text(
+-                'Missão concluída!',
+-                style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900),
+-              ),
+-              const SizedBox(height: 24),
+-              FilledButton(
+-                onPressed: () => Navigator.of(context).pop(),
+-                child: const Text('Voltar'),
+-              ),
+-            ],
++          child: Padding(
++            padding: const EdgeInsets.all(24),
++            child: Column(
++              mainAxisSize: MainAxisSize.min,
++              children: [
++                const GameVisualStrip(kind: GameVisualKind.social, height: 125),
++                const SizedBox(height: 16),
++                const Text('Missão concluída!', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900)),
++                const SizedBox(height: 10),
++                const Text('Você explorou diferentes maneiras respeitosas de lidar com situações sociais.', textAlign: TextAlign.center),
++                const SizedBox(height: 24),
++                FilledButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Voltar às missões')),
++              ],
++            ),
+           ),
+         ),
+       );
+-    if (_sessionId == null)
++    }
++
++    if (_sessionId == null) {
+       return Scaffold(
+-        appBar: AppBar(title: const Text('G06 • Mundo dos Amigos')),
+-        body: Center(
+-          child: Column(
+-            mainAxisSize: MainAxisSize.min,
++        appBar: AppBar(),
++        body: SafeArea(
++          child: ListView(
++            padding: const EdgeInsets.all(26),
+             children: [
+               const GameVisualStrip(kind: GameVisualKind.social, height: 130),
+-              const SizedBox(height: 20),
+-              FilledButton.icon(
+-                onPressed: _start,
+-                icon: const Icon(Icons.play_arrow_rounded),
+-                label: const Text('Começar'),
++              const SizedBox(height: 16),
++              const Text('Mundo dos Amigos', textAlign: TextAlign.center, style: TextStyle(fontSize: 31, fontWeight: FontWeight.w900)),
++              const SizedBox(height: 12),
++              const Text(
++                'Você vai ler pequenas histórias e escolher uma resposta respeitosa. Em várias histórias existe mais de uma boa alternativa.',
++                textAlign: TextAlign.center,
++                style: TextStyle(fontSize: 17, height: 1.45),
+               ),
++              const SizedBox(height: 16),
++              const _SocialTip(icon: Icons.front_hand_rounded, text: 'Respeite quando alguém disser não ou pedir espaço.'),
++              const _SocialTip(icon: Icons.sync_alt_rounded, text: 'Turnos e acordos podem ajudar quando duas pessoas querem coisas diferentes.'),
++              const _SocialTip(icon: Icons.question_answer_rounded, text: 'Perguntar e explicar pode resolver mal-entendidos.'),
++              const SizedBox(height: 22),
++              FilledButton.icon(onPressed: _start, icon: const Icon(Icons.play_arrow_rounded), label: const Text('Começar histórias')),
+             ],
+           ),
+         ),
+       );
++    }
++
+     final p = _presented;
+     return Scaffold(
+-      appBar: AppBar(title: const Text('G06 • Mundo dos Amigos')),
++      appBar: AppBar(title: const Text('Mundo dos Amigos')),
+       body: SafeArea(
+-        child: Padding(
+-          padding: const EdgeInsets.all(24),
+-          child: Column(
+-            crossAxisAlignment: CrossAxisAlignment.stretch,
+-            children: [
+-              LinearProgressIndicator(value: (_index + 1) / _trialsPerSession),
+-              const SizedBox(height: 14),
+-              Text(
+-                'História ${_index + 1} de $_trialsPerSession • nível ${_state.level}',
+-                style: const TextStyle(fontWeight: FontWeight.w800),
+-              ),
+-              const GameVisualStrip(kind: GameVisualKind.social, height: 90),
+-              Container(
+-                padding: const EdgeInsets.all(20),
+-                decoration: BoxDecoration(
+-                  color: const Color(0xFFFFF2E8),
+-                  borderRadius: BorderRadius.circular(24),
+-                ),
+-                child: Column(
+-                  children: [
+-                    Text(
+-                      p?.story ?? 'Preparando história…',
+-                      textAlign: TextAlign.center,
+-                      style: const TextStyle(
+-                        fontSize: 21,
+-                        fontWeight: FontWeight.w800,
+-                      ),
+-                    ),
+-                    const SizedBox(height: 10),
+-                    Text(_feedback, textAlign: TextAlign.center),
+-                  ],
+-                ),
++        child: ListView(
++          padding: const EdgeInsets.fromLTRB(20, 8, 20, 26),
++          children: [
++            LinearProgressIndicator(value: (_index + 1) / _trialsPerSession),
++            const SizedBox(height: 12),
++            Text('História ${_index + 1} de $_trialsPerSession', style: const TextStyle(fontWeight: FontWeight.w800)),
++            const SizedBox(height: 16),
++            Container(
++              padding: const EdgeInsets.all(20),
++              decoration: BoxDecoration(color: const Color(0xFFFFF0E6), borderRadius: BorderRadius.circular(26)),
++              child: Column(
++                children: [
++                  const Icon(Icons.forum_rounded, color: Color(0xFFD46F35), size: 44),
++                  const SizedBox(height: 10),
++                  Text(
++                    p?.story ?? 'Preparando história…',
++                    textAlign: TextAlign.center,
++                    style: const TextStyle(fontSize: 20, height: 1.35, fontWeight: FontWeight.w800),
++                  ),
++                ],
+               ),
+-              const SizedBox(height: 16),
+-              if (p != null)
+-                ...p.choices.asMap().entries.map(
+-                  (e) => Padding(
+-                    padding: const EdgeInsets.only(bottom: 10),
+-                    child: FilledButton.tonal(
+-                      onPressed: _resolved ? null : () => _choose(e.key),
+-                      child: Padding(
+-                        padding: const EdgeInsets.all(14),
+-                        child: Text(e.value),
+-                      ),
++            ),
++            const SizedBox(height: 14),
++            Text(_feedback, textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.w700, height: 1.35)),
++            const SizedBox(height: 14),
++            if (p != null)
++              for (final entry in p.choices.asMap().entries)
++                Padding(
++                  padding: const EdgeInsets.only(bottom: 10),
++                  child: FilledButton.tonal(
++                    onPressed: _resolved ? null : () => _choose(entry.key),
++                    child: Padding(
++                      padding: const EdgeInsets.symmetric(vertical: 14),
++                      child: Text(entry.value, textAlign: TextAlign.center, style: const TextStyle(fontSize: 15)),
+                     ),
+                   ),
+                 ),
+-              const Spacer(),
+-              const Text(
+-                'O objetivo é praticar leitura de contexto, respeito e alternativas sociais; não existe meta de mascaramento ou normalização comportamental.',
+-                textAlign: TextAlign.center,
+-                style: TextStyle(fontSize: 12),
+-              ),
+-            ],
+-          ),
++            const SizedBox(height: 4),
++            Text(
++              'Não procure uma resposta “perfeita”. Pense em respeito, limites, segurança e possibilidade de diálogo.',
++              textAlign: TextAlign.center,
++              style: TextStyle(fontSize: 12, height: 1.4, color: Theme.of(context).colorScheme.onSurfaceVariant),
++            ),
++          ],
+         ),
+       ),
+     );
+   }
+ }
++
++class _SocialTip extends StatelessWidget {
++  const _SocialTip({required this.icon, required this.text});
++  final IconData icon;
++  final String text;
++  @override
++  Widget build(BuildContext context) => Padding(
++    padding: const EdgeInsets.only(bottom: 8),
++    child: Container(
++      padding: const EdgeInsets.all(14),
++      decoration: BoxDecoration(color: const Color(0xFFFFF0E6), borderRadius: BorderRadius.circular(18)),
++      child: Row(children: [Icon(icon, color: const Color(0xFFD46F35)), const SizedBox(width: 12), Expanded(child: Text(text))]),
++    ),
++  );
++}
+diff -ruN '--exclude=*.orig' '--exclude=assets' nc_v19_base/lib/features/g06_social/social_scenario.dart nc_v21_work/src/lib/features/g06_social/social_scenario.dart
+--- nc_v19_base/lib/features/g06_social/social_scenario.dart	2026-08-21 16:51:44.000000000 +0000
++++ nc_v21_work/src/lib/features/g06_social/social_scenario.dart	2026-10-04 00:56:08.147488230 +0000
+@@ -5,10 +5,15 @@
+     required this.story,
+     required this.choices,
+     required this.preferredIndex,
++    required this.supportiveIndices,
+   });
++
+   final String story;
+   final List<String> choices;
+   final int preferredIndex;
++  final List<int> supportiveIndices;
++
++  bool isSupportive(int displayIndex) => supportiveIndices.contains(displayIndex);
+ }
+ 
+ class SocialScenario {
+@@ -16,79 +21,114 @@
+     required this.story,
+     required this.choices,
+     required this.preferredIndex,
++    required this.supportiveIndices,
+   });
++
+   final String story;
+   final List<String> choices;
+   final int preferredIndex;
++  final List<int> supportiveIndices;
+ 
+   PresentedSocialScenario present({
+     required Random random,
+     required int choiceCount,
+     required int preferredPosition,
+   }) {
+-    final safeCount = choiceCount.clamp(2, choices.length).toInt();
+-    final preferred = choices[preferredIndex];
+-    final alternatives = <String>[
+-      for (var i = 0; i < choices.length; i++)
+-        if (i != preferredIndex) choices[i],
++    final safeCount = choiceCount.clamp(3, choices.length).toInt();
++    final all = List<int>.generate(choices.length, (i) => i);
++    final supportiveAlternatives = [
++      for (final i in supportiveIndices)
++        if (i != preferredIndex) i,
++    ]..shuffle(random);
++    final nonSupportive = [
++      for (final i in all)
++        if (!supportiveIndices.contains(i)) i,
+     ]..shuffle(random);
+-    final visible = <String>[preferred, ...alternatives.take(safeCount - 1)]
+-      ..shuffle(random);
+-    final targetPosition = preferredPosition.clamp(0, safeCount - 1).toInt();
+-    visible.remove(preferred);
+-    visible.insert(targetPosition, preferred);
++
++    final selected = <int>[preferredIndex];
++    if (supportiveAlternatives.isNotEmpty) selected.add(supportiveAlternatives.first);
++    if (nonSupportive.isNotEmpty && selected.length < safeCount) selected.add(nonSupportive.first);
++
++    final remaining = [for (final i in all) if (!selected.contains(i)) i]..shuffle(random);
++    for (final i in remaining) {
++      if (selected.length >= safeCount) break;
++      selected.add(i);
++    }
++    selected.shuffle(random);
++
++    final desired = preferredPosition.clamp(0, safeCount - 1).toInt();
++    selected.remove(preferredIndex);
++    selected.insert(desired, preferredIndex);
++

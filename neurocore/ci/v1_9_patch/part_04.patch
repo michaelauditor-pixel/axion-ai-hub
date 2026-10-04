@@ -1,0 +1,142 @@
+-                      const Icon(Icons.landscape_rounded, size: 74),
++                      const GameVisualStrip(
++                        kind: GameVisualKind.regulation,
++                        height: 122,
++                      ),
+                       const SizedBox(height: 16),
+                       const Text(
+                         'Montanha concluída!',
+@@ -178,6 +259,7 @@
+                       const SizedBox(height: 12),
+                       const Text(
+                         'Você praticou pausas e escolhas de autorregulação no jogo.',
++                        textAlign: TextAlign.center,
+                       ),
+                       const SizedBox(height: 24),
+                       FilledButton(
+@@ -189,10 +271,20 @@
+                 )
+               : _sessionId == null
+               ? Center(
+-                  child: FilledButton.icon(
+-                    onPressed: _start,
+-                    icon: const Icon(Icons.play_arrow_rounded),
+-                    label: const Text('Começar subida'),
++                  child: Column(
++                    mainAxisSize: MainAxisSize.min,
++                    children: [
++                      const GameVisualStrip(
++                        kind: GameVisualKind.regulation,
++                        height: 130,
++                      ),
++                      const SizedBox(height: 22),
++                      FilledButton.icon(
++                        onPressed: _start,
++                        icon: const Icon(Icons.play_arrow_rounded),
++                        label: const Text('Começar subida'),
++                      ),
++                    ],
+                   ),
+                 )
+               : Column(
+@@ -205,38 +297,37 @@
+                       style: const TextStyle(fontWeight: FontWeight.w800),
+                     ),
+                     const SizedBox(height: 18),
++                    const GameVisualStrip(
++                      kind: GameVisualKind.regulation,
++                      height: 104,
++                    ),
++                    const SizedBox(height: 14),
+                     Container(
+-                      padding: const EdgeInsets.all(22),
++                      padding: const EdgeInsets.all(20),
+                       decoration: BoxDecoration(
+                         color: const Color(0xFFEAF8F2),
+                         borderRadius: BorderRadius.circular(24),
+                       ),
+-                      child: Column(
+-                        children: [
+-                          const Icon(Icons.landscape_rounded, size: 72),
+-                          const SizedBox(height: 12),
+-                          Text(
+-                            _feedback,
+-                            textAlign: TextAlign.center,
+-                            style: const TextStyle(
+-                              fontSize: 22,
+-                              fontWeight: FontWeight.w800,
+-                            ),
+-                          ),
+-                        ],
++                      child: Text(
++                        _feedback,
++                        textAlign: TextAlign.center,
++                        style: const TextStyle(
++                          fontSize: 21,
++                          fontWeight: FontWeight.w800,
++                        ),
+                       ),
+                     ),
+                     const SizedBox(height: 20),
+-                    ..._strategies
+-                        .take(config.choiceCount)
+-                        .map(
+-                          (s) => Padding(
++                    ..._visibleStrategies(config).map(
++                          (strategy) => Padding(
+                             padding: const EdgeInsets.only(bottom: 12),
+                             child: FilledButton.tonal(
+-                              onPressed: _busy ? null : () => _choose(s),
++                              onPressed: _busy
++                                  ? null
++                                  : () => _choose(strategy),
+                               child: Padding(
+                                 padding: const EdgeInsets.all(14),
+-                                child: Text(s),
++                                child: Text(strategy),
+                               ),
+                             ),
+                           ),
+diff -ruN source_before/lib/features/g05_regulation/regulation_difficulty_config.dart source_after/lib/features/g05_regulation/regulation_difficulty_config.dart
+--- source_before/lib/features/g05_regulation/regulation_difficulty_config.dart	2026-08-16 09:06:15.000000000 +0000
++++ source_after/lib/features/g05_regulation/regulation_difficulty_config.dart	2026-08-21 14:47:32.511586282 +0000
+@@ -3,24 +3,24 @@
+     required this.level,
+     required this.pacingSeconds,
+     required this.choiceCount,
+-    required this.promptHoldMs,
++    required this.responseWindowMs,
+   });
+ 
+   final int level;
+   final int pacingSeconds;
+   final int choiceCount;
+-  final int promptHoldMs;
++  final int responseWindowMs;
+ 
+   static RegulationDifficultyConfig forLevel(int level) {
+     final safe = level.clamp(1, 5).toInt();
+     const pacing = [5, 5, 4, 4, 3];
+     const choices = [2, 2, 3, 3, 4];
+-    const hold = [2500, 2300, 2100, 1900, 1700];
++    const responseWindows = [14000, 13500, 12500, 11500, 10500];
+     return RegulationDifficultyConfig(
+       level: safe,
+       pacingSeconds: pacing[safe - 1],
+       choiceCount: choices[safe - 1],
+-      promptHoldMs: hold[safe - 1],
++      responseWindowMs: responseWindows[safe - 1],
+     );
+   }
+ }
+diff -ruN source_before/lib/features/g06_social/g06_screen.dart source_after/lib/features/g06_social/g06_screen.dart
+--- source_before/lib/features/g06_social/g06_screen.dart	2026-08-21 13:15:46.000000000 +0000
++++ source_after/lib/features/g06_social/g06_screen.dart	2026-08-21 14:47:18.095008849 +0000
+@@ -1,9 +1,13 @@
++import 'dart:async';
++import 'dart:math';
++
+ import 'package:flutter/material.dart';
+ 
+ import '../../core/adaptive/adaptive_engine.dart';
+ import '../../core/adaptive/social_adaptive_engine.dart';
