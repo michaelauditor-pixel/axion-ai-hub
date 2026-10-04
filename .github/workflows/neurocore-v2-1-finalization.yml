@@ -121,6 +121,51 @@ jobs:
           echo 'ff1d07c178cbd2d2f644ce7adb142b5abfb6672a1e06d7139a46f01ab9d2841b  /tmp/neurocore_v21_overlay.tar.gz' | sha256sum --check --strict
           tar -xzf /tmp/neurocore_v21_overlay.tar.gz -C /tmp/neurocore
 
+          # Keep the V2 longitudinal/profile regression tests that were generated
+          # in the validated V2.0 build, now aligned with V2.1 comparability rules.
+          cat > test/neuro_profile_aggregator_test.dart <<'EOF'
+          import 'package:flutter_test/flutter_test.dart';
+          import 'package:neurocore_app/core/profile/neuro_profile_aggregator.dart';
+          import 'package:neurocore_app/ml/feature_contract.dart';
+          void main() {
+            SessionFeatureVectorV1 feature(int index) => SessionFeatureVectorV1(
+              profileId:'p1', sessionId:'s$index', gameId:'G01_missao_foco', completedAt:DateTime.utc(2026,8,1+index),
+              hitRate:.80, commissionRate:.10, omissionRate:.05, reactionTimeCv:.20, medianReactionTimeMs:700, finalDifficulty:2, blocksCompleted:5);
+            test('requires three same-game same-difficulty usable sessions and no global score', () {
+              final a=const NeuroProfileAggregator().aggregate(profileId:'p1',features:[feature(0),feature(1)]);
+              expect(a.sustainedAttentionIndicator,isNull);
+              final b=const NeuroProfileAggregator().aggregate(profileId:'p1',features:[feature(0),feature(1),feature(2)]);
+              expect(b.sustainedAttentionIndicator,isNotNull);
+              expect(b.overallGameplayIndicator,isNull);
+            });
+          }
+          EOF
+
+          cat > test/neuro_profile_multidomain_test.dart <<'EOF'
+          import 'package:flutter_test/flutter_test.dart';
+          import 'package:neurocore_app/core/profile/neuro_profile_aggregator.dart';
+          import 'package:neurocore_app/ml/feature_contract.dart';
+          void main(){
+            SessionFeatureVectorV1 f(String game,int i)=>SessionFeatureVectorV1(profileId:'p',sessionId:'$game-$i',gameId:game,completedAt:DateTime.utc(2026,8,1+i),hitRate:.85,commissionRate:.1,omissionRate:.05,reactionTimeCv:.2,medianReactionTimeMs:700,finalDifficulty:2,blocksCompleted:3);
+            test('six domains stay separate with comparable usable sessions',(){
+              const games=['G01_missao_foco','G02_pare_pense_va','G03_memoria_magica','G04_troca_troca','G05_montanha_calma','G06_mundo_amigos'];
+              final x=<SessionFeatureVectorV1>[]; for(final g in games){for(var i=0;i<3;i++){x.add(f(g,i));}}
+              final v=const NeuroProfileAggregator().aggregate(profileId:'p',features:x);
+              expect(v.sustainedAttentionIndicator,isNotNull); expect(v.inhibitoryControlIndicator,isNotNull); expect(v.workingMemoryIndicator,isNotNull); expect(v.cognitiveFlexibilityIndicator,isNotNull); expect(v.selfRegulationPracticeIndicator,isNotNull); expect(v.socialEmotionalLearningIndicator,isNotNull); expect(v.overallGameplayIndicator,isNull);
+            });
+          }
+          EOF
+
+          cat > test/v20_product_audit_test.dart <<'EOF'
+          import 'package:flutter_test/flutter_test.dart';
+          import 'package:neurocore_app/core/product/product_info.dart';
+          import 'package:neurocore_app/features/g06_social/social_scenario.dart';
+          void main(){
+            test('age and clinical boundary are explicit',(){expect(NeuroCoreProductInfo.recommendedAge,'6 a 11 anos'); expect(NeuroCoreProductInfo.clinicalBoundary.toLowerCase(),contains('não trata'));});
+            test('social stories permit multiple supportive answers',(){for(final s in SocialScenario.examples){expect(s.supportiveIndices.length,greaterThanOrEqualTo(2)); expect(s.supportiveIndices,contains(s.preferredIndex));}});
+          }
+          EOF
+
           dart fix --apply
           dart format lib test
           flutter pub get
