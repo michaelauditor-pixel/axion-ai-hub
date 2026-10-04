@@ -1,0 +1,227 @@
+name: NeuroCore V2.1 Finalization
+on:
+  push:
+    branches: [neurocore-v2-1-finalization]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate_release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Fetch validated V1.9 construction inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin neurocore-local-v1-7-validation:refs/remotes/origin/neurocore-local-v1-7-validation --depth=1
+          rm -rf /tmp/legacy /tmp/neurocore
+          mkdir -p /tmp/legacy /tmp/neurocore
+          git archive origin/neurocore-local-v1-7-validation neurocore/ci/source_chunks neurocore/ci/v1_9_patch neurocore/ci/v1_9_overlay | tar -x -C /tmp/legacy
+          cat /tmp/legacy/neurocore/ci/source_chunks/chunk_*.b64 > /tmp/source.b64
+          base64 --decode /tmp/source.b64 > /tmp/source.tar.gz
+          echo '0aa63928c44bbacc142db6449abb51abfb91de3bb00d92e07211a465ea39aaf2  /tmp/source.tar.gz' | sha256sum --check --strict
+          tar -xzf /tmp/source.tar.gz -C /tmp/neurocore
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.0'
+          channel: stable
+          cache: true
+
+      - name: Rebuild hardened V1.9 baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/ncwrap
+          flutter create --org br.com.neurocore --project-name neurocore_app --platforms=android /tmp/ncwrap
+          cp -a /tmp/ncwrap/android /tmp/neurocore/android
+          python3 - <<'PY'
+          from pathlib import Path
+          root=Path('/tmp/neurocore')
+          p=root/'pubspec.yaml'
+          s=p.read_text().replace('flutter_secure_storage: ^11.0.0','flutter_secure_storage: 10.3.1')
+          s='\n'.join(x for x in s.splitlines() if not x.strip().startswith('cryptography_flutter:'))+'\n'
+          p.write_text(s)
+          m=root/'lib/main.dart'
+          s=m.read_text().replace("import 'package:cryptography_flutter/cryptography_flutter.dart';\n",'').replace('  FlutterCryptography.enable();\n','').replace('FlutterCryptography.enable();\n','')
+          m.write_text(s)
+          k=root/'android/app/build.gradle.kts'
+          k.write_text(k.read_text().replace('minSdk = flutter.minSdkVersion','minSdk = 24').replace('minSdk = 23','minSdk = 24'))
+          manifest=root/'android/app/src/main/AndroidManifest.xml'
+          if 'android:allowBackup=' not in manifest.read_text():
+              manifest.write_text(manifest.read_text().replace('<application','<application android:allowBackup="false" android:usesCleartextTraffic="false"',1))
+          PY
+          cd /tmp/neurocore
+          flutter pub get
+          dart fix --apply
+          python3 - <<'PY'
+          from pathlib import Path
+          c=Path('lib/core/security/crypto_box.dart')
+          s=c.read_text().replace('const FlutterSecureStorage _secureStorage = FlutterSecureStorage();','final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();').replace('const FlutterSecureStorage _secureStorage = const FlutterSecureStorage();','final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();')
+          c.write_text(s)
+          p=Path('pubspec.yaml')
+          p.write_text('\n'.join(x for x in p.read_text().splitlines() if not x.strip().startswith('cryptography_flutter:'))+'\n')
+          m=Path('lib/main.dart')
+          m.write_text(m.read_text().replace("import 'package:cryptography_flutter/cryptography_flutter.dart';\n",'').replace('  FlutterCryptography.enable();\n','').replace('FlutterCryptography.enable();\n',''))
+          PY
+          dart format lib test
+          flutter pub get
+          cat /tmp/legacy/neurocore/ci/v1_9_patch/part_*.patch > /tmp/v19.patch
+          set +e
+          patch -p1 --batch --forward < /tmp/v19.patch
+          STATUS=$?
+          set -e
+          REJECTS=$(find . -name '*.rej' -print)
+          if [ -n "$REJECTS" ]; then
+            BAD=$(echo "$REJECTS" | grep -v '^./lib/features/g06_social/g06_screen.dart.rej$' || true)
+            test -z "$BAD"
+          elif [ "$STATUS" -ne 0 ]; then
+            exit 1
+          fi
+          cp -a /tmp/legacy/neurocore/ci/v1_9_overlay/. /tmp/neurocore/
+          rm -f lib/features/g06_social/g06_screen.dart.rej
+          dart fix --apply
+          dart format lib test
+          flutter pub get
+
+      - name: Apply V2.1 finalization overlay
+        shell: bash
+        run: |
+          set -euo pipefail
+          # V2.0 contains the audited UX/content assets that remain part of V2.1.
+          cp -a neurocore/v2_overlay/. /tmp/neurocore/
+          cd /tmp/neurocore
+          python3 - <<'PY'
+          from pathlib import Path
+          d=Path('lib/features/parent/parent_dashboard_screen.dart')
+          s=d.read_text()
+          if "import 'parent_guide_screen.dart';" not in s:
+              s=s.replace("import 'privacy_management_screen.dart';", "import 'parent_guide_screen.dart';\nimport 'privacy_management_screen.dart';")
+          if 'Guia para responsáveis' not in s:
+              marker="""                    const SizedBox(height: 14),\n                    Card(\n                      child: ListTile(\n                        leading: const Icon(Icons.privacy_tip_outlined),"""
+              guide="""                    const SizedBox(height: 14),\n                    Card(\n                      child: ListTile(\n                        leading: const Icon(Icons.menu_book_rounded),\n                        title: const Text('Guia para responsáveis', style: TextStyle(fontWeight: FontWeight.w800)),\n                        subtitle: const Text('Objetivos reais de cada missão, faixa etária, limites dos indicadores e informações de mercado.'),\n                        trailing: const Icon(Icons.chevron_right_rounded),\n                        onTap: () => Navigator.of(context).push<void>(\n                          MaterialPageRoute<void>(builder: (_) => const ParentGuideScreen()),\n                        ),\n                      ),\n                    ),\n                    const SizedBox(height: 14),\n                    Card(\n                      child: ListTile(\n                        leading: const Icon(Icons.privacy_tip_outlined),"""
+              if marker not in s:
+                  raise SystemExit('parent dashboard insertion point not found')
+              s=s.replace(marker, guide, 1)
+          d.write_text(s)
+
+          f=Path('lib/ml/feature_contract.dart')
+          s=f.read_text().replace("hitRate: _unit(_asDouble(performance['context_match_rate'])),", "hitRate: _unit(_asDouble(performance['supportive_choice_rate'])),")
+          f.write_text(s)
+          PY
+
+          # Apply the exact V2.1 correction set and verify it byte-for-byte.
+          cat "$GITHUB_WORKSPACE"/neurocore/v21_overlay/chunk_*.b64 > /tmp/neurocore_v21_overlay.b64
+          base64 --decode /tmp/neurocore_v21_overlay.b64 > /tmp/neurocore_v21_overlay.tar.gz
+          echo 'ff1d07c178cbd2d2f644ce7adb142b5abfb6672a1e06d7139a46f01ab9d2841b  /tmp/neurocore_v21_overlay.tar.gz' | sha256sum --check --strict
+          tar -xzf /tmp/neurocore_v21_overlay.tar.gz -C /tmp/neurocore
+
+          dart fix --apply
+          dart format lib test
+          flutter pub get
+
+      - name: Acceptance invariants
+        working-directory: /tmp/neurocore
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q '^version: 2.1.0+21' pubspec.yaml
+          grep -q "versionLabel = 'V2.1'" lib/core/product/product_info.dart
+          grep -q 'loadStartingDifficulty' lib/core/data/neuro_repository.dart
+          test "$(grep -R -l 'with WidgetsBindingObserver' lib/features/g0*/g*_screen.dart | wc -l)" -eq 6
+          test "$(grep -R -l 'loadStartingDifficulty(' lib/features/g0*/g*_screen.dart | wc -l)" -eq 6
+          grep -q 'media.textScaler.scale(1.0)' lib/app.dart
+          grep -q "'completion_confirmed_after_guidance': true" lib/features/g05_regulation/g05_screen.dart
+          grep -q "'reason': 'explicit_skip'" lib/features/g06_social/g06_screen.dart
+          ! grep -q '_responseWindowMs' lib/features/g06_social/g06_screen.dart
+          ! grep -q 'Timer(' lib/features/g06_social/g06_screen.dart
+          ! grep -R -q 'NeuroCore V0.6' lib
+          ! grep -R -q 'V1.7 FINAL RC2' lib
+          ! grep -E -q 'google_mobile_ads|firebase_analytics|facebook_app_events|amplitude_flutter|mixpanel_flutter|geolocator|app_tracking_transparency' pubspec.yaml
+
+      - name: Flutter analyze strict
+        working-directory: /tmp/neurocore
+        run: flutter analyze
+
+      - name: Flutter tests
+        working-directory: /tmp/neurocore
+        run: flutter test --reporter expanded
+
+      - name: Build Android release APK
+        working-directory: /tmp/neurocore
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter build apk --release 2>&1 | tee /tmp/build.log
+          ! grep -q 'plugins that apply Kotlin Gradle Plugin' /tmp/build.log
+          APK=build/app/outputs/flutter-apk/app-release.apk
+          test -s "$APK"
+          AAPT=$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -1)
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)
+          "$AAPT" dump badging "$APK" | tee /tmp/apk_badging.txt
+          grep -q "package: name='br.com.neurocore.neurocore_app' versionCode='21' versionName='2.1.0'" /tmp/apk_badging.txt
+          ! grep -q 'application-debuggable' /tmp/apk_badging.txt
+          "$APKSIGNER" verify --verbose --print-certs "$APK" | tee /tmp/apksigner.txt
+
+      - name: Create V2.1 evidence and source package
+        working-directory: /tmp/neurocore
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=build/app/outputs/flutter-apk/app-release.apk
+          APK_SHA=$(sha256sum "$APK" | awk '{print $1}')
+          tar -czf neurocore_v2_1_source.tar.gz pubspec.yaml pubspec.lock analysis_options.yaml lib test android
+          SOURCE_SHA=$(sha256sum neurocore_v2_1_source.tar.gz | awk '{print $1}')
+          python3 - "$APK_SHA" "$SOURCE_SHA" <<'PY'
+          import json,sys
+          data={
+            'version':'2.1.0+21',
+            'flutter_analyze':'pass',
+            'flutter_tests':'pass',
+            'android_apk':'pass',
+            'build_type':'release',
+            'debuggable':False,
+            'package_id':'br.com.neurocore.neurocore_app',
+            'recommended_age':'6-11',
+            'current_language':'pt-BR',
+            'clinical_positioning':'neuroeducational_non_diagnostic_non_treatment',
+            'persistent_progression':True,
+            'practiced_and_next_difficulty_separated':True,
+            'lifecycle_interruption':'abandon_session_and_return_home_on_resume',
+            'system_text_scale':'preserved',
+            'g03_max_span':'largest_exactly_reproduced_sequence',
+            'g05':'guided_completion_after_exercise',
+            'g06':'multiple_supportive_responses_no_reading_deadline',
+            'domain_min_sessions':3,
+            'domain_comparison':'same_game_same_recent_difficulty_usable_sessions',
+            'global_cross_game_score':'disabled',
+            'store_release_signing':'not_proven_ci_uses_generated_android_debug_key_for_release_mode',
+            'in_place_update_signature_continuity':'not_proven',
+            'physical_device_validation':'pending',
+            'apk_sha256':sys.argv[1],
+            'source_sha256':sys.argv[2],
+          }
+          open('neurocore_v2_1_evidence.json','w').write(json.dumps(data,indent=2,ensure_ascii=False)+'\n')
+          PY
+          cp /tmp/apk_badging.txt ./neurocore_v2_1_apk_badging.txt
+          cp /tmp/apksigner.txt ./neurocore_v2_1_apksigner.txt
+          cat neurocore_v2_1_evidence.json
+
+      - name: Upload NeuroCore V2.1 release candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: neurocore-v2.1-finalized-android
+          path: |
+            /tmp/neurocore/build/app/outputs/flutter-apk/app-release.apk
+            /tmp/neurocore/neurocore_v2_1_evidence.json
+            /tmp/neurocore/neurocore_v2_1_apk_badging.txt
+            /tmp/neurocore/neurocore_v2_1_apksigner.txt
+            /tmp/neurocore/neurocore_v2_1_source.tar.gz
+            /tmp/neurocore/pubspec.lock
+          if-no-files-found: error
+          retention-days: 14
