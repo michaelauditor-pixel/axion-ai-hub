@@ -1,0 +1,280 @@
++        icon: Icons.landscape_rounded,
++        background: const Color(0xFFE5F6F1),
++        foreground: const Color(0xFF27856E),
++        onTap: () => _openGame((id) => G05RegulationScreen(services: widget.services, profileId: id)),
++      ),
++      _MissionCardData(
++        title: 'Mundo dos Amigos',
++        subtitle: 'Explore escolhas respeitosas em histórias sociais.',
++        icon: Icons.diversity_1_rounded,
++        background: const Color(0xFFFFEEE3),
++        foreground: const Color(0xFFD46F35),
++        onTap: () => _openGame((id) => G06SocialScreen(services: widget.services, profileId: id)),
++      ),
++    ];
+ 
+     return Scaffold(
+       body: SafeArea(
+         child: ListView(
+-          padding: const EdgeInsets.all(24),
++          padding: const EdgeInsets.fromLTRB(18, 16, 18, 30),
+           children: [
+-            const SizedBox(height: 12),
+             Row(
+               children: [
+                 Container(
+-                  width: 54,
+-                  height: 54,
++                  width: 52,
++                  height: 52,
+                   decoration: BoxDecoration(
+-                    color: Theme.of(context).colorScheme.primaryContainer,
++                    gradient: const LinearGradient(colors: [Color(0xFF5066D8), Color(0xFF7F63D8)]),
+                     borderRadius: BorderRadius.circular(18),
+                   ),
+-                  child: const Icon(Icons.auto_awesome_rounded, size: 30),
++                  child: const Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 30),
+                 ),
+-                const SizedBox(width: 14),
++                const SizedBox(width: 12),
+                 const Expanded(
+-                  child: Column(
+-                    crossAxisAlignment: CrossAxisAlignment.start,
+-                    children: [
+-                      Text(
+-                        'NeuroCore',
+-                        style: TextStyle(
+-                          fontSize: 26,
+-                          fontWeight: FontWeight.w900,
+-                        ),
+-                      ),
+-                      Text(
+-                        'V1.9 AUDITED • 6 jogos • VÁ/PARE balanceado • sons/háptica • mais variedade visual • privacidade • ML shadow/fail-closed',
+-                      ),
+-                    ],
+-                  ),
++                  child: Text(ProductInfo.name, style: TextStyle(fontSize: 27, fontWeight: FontWeight.w900)),
+                 ),
+                 IconButton.filledTonal(
+                   tooltip: 'Conforto e acessibilidade',
+                   onPressed: _openAccessibility,
+-                  icon: const Icon(Icons.accessibility_new_rounded),
++                  icon: const Icon(Icons.tune_rounded),
+                 ),
+-                const SizedBox(width: 8),
++                const SizedBox(width: 6),
+                 IconButton.filledTonal(
+                   tooltip: 'Área do responsável',
+                   onPressed: _openParentArea,
+-                  icon: const Icon(Icons.supervisor_account_outlined),
++                  icon: const Icon(Icons.lock_outline_rounded),
+                 ),
+               ],
+             ),
+             const SizedBox(height: 24),
+             Container(
+-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
++              padding: const EdgeInsets.all(20),
+               decoration: BoxDecoration(
+-                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+-                borderRadius: BorderRadius.circular(18),
++                color: const Color(0xFFEDEFFF),
++                borderRadius: BorderRadius.circular(28),
+               ),
+               child: Row(
+                 children: [
+-                  const Icon(Icons.face_rounded),
+-                  const SizedBox(width: 10),
++                  Container(
++                    width: 58,
++                    height: 58,
++                    decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
++                    child: const Icon(Icons.face_rounded, size: 34, color: Color(0xFF5066D8)),
++                  ),
++                  const SizedBox(width: 14),
+                   Expanded(
+-                    child: Text(
+-                      "Jogando como: ${_activeProfile?.displayLabel ?? 'Explorador'}",
+-                      style: const TextStyle(fontWeight: FontWeight.w700),
++                    child: Column(
++                      crossAxisAlignment: CrossAxisAlignment.start,
++                      children: [
++                        Text('Oi, $name!', style: const TextStyle(fontSize: 23, fontWeight: FontWeight.w900)),
++                        const SizedBox(height: 4),
++                        const Text('Escolha uma missão para treinar hoje.', style: TextStyle(fontSize: 15, height: 1.3)),
++                      ],
+                     ),
+                   ),
+-                  const Icon(Icons.lock_outline_rounded, size: 18),
+                 ],
+               ),
+             ),
+             const SizedBox(height: 24),
+-            const Text(
+-              'Escolha uma missão.',
+-              style: TextStyle(
+-                fontSize: 30,
+-                height: 1.05,
+-                fontWeight: FontWeight.w900,
+-              ),
+-            ),
+-            const SizedBox(height: 12),
++            const Text('Suas missões', style: TextStyle(fontSize: 25, fontWeight: FontWeight.w900)),
++            const SizedBox(height: 6),
+             Text(
+-              'Cada missão coleta métricas diferentes e ajusta a dificuldade ao desempenho observado.',
+-              style: TextStyle(
+-                fontSize: 15,
+-                height: 1.45,
+-                color: Theme.of(context).colorScheme.onSurfaceVariant,
+-              ),
+-            ),
+-            const SizedBox(height: 28),
+-            _GameCard(
+-              background: const Color(0xFFEAF0FF),
+-              iconBackground: const Color(0xFF4F67D8),
+-              icon: Icons.star_rounded,
+-              title: 'G01 • Missão Foco',
+-              description:
+-                  'Encontre a estrela azul entre os outros símbolos. Trabalha atenção seletiva e consistência de resposta no jogo.',
+-              buttonLabel: 'Iniciar Missão Foco',
+-              onTap: _openG01,
+-            ),
+-            const SizedBox(height: 16),
+-            _GameCard(
+-              background: const Color(0xFFE9F8EE),
+-              iconBackground: const Color(0xFF2F8B50),
+-              icon: Icons.pan_tool_alt_rounded,
+-              title: 'G02 • Pare, Pense, Vá!',
+-              description:
+-                  'Toque quando aparecer VÁ e espere quando aparecer PARE. O ritmo se adapta ao desempenho da sessão.',
+-              buttonLabel: 'Iniciar Pare, Pense, Vá!',
+-              onTap: _openG02,
++              'Faça uma missão por vez. Você pode parar e descansar quando quiser.',
++              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, height: 1.35),
+             ),
+             const SizedBox(height: 16),
+-            _GameCard(
+-              background: const Color(0xFFFFF4DD),
+-              iconBackground: const Color(0xFFD38A21),
+-              icon: Icons.auto_awesome_rounded,
+-              title: 'G03 • Memória Mágica',
+-              description:
+-                  'Observe uma sequência curta de símbolos e repita a mesma ordem. O comprimento e o ritmo se ajustam ao desempenho.',
+-              buttonLabel: 'Iniciar Memória Mágica',
+-              onTap: _openG03,
+-            ),
+-            const SizedBox(height: 16),
+-            _GameCard(
+-              background: const Color(0xFFF2EAFE),
+-              iconBackground: const Color(0xFF7B52B9),
+-              icon: Icons.swap_horiz_rounded,
+-              title: 'G04 • Troca-Troca',
+-              description:
+-                  'Classifique o símbolo pela cor ou pela forma e acompanhe as mudanças de regra durante a missão.',
+-              buttonLabel: 'Iniciar Troca-Troca',
+-              onTap: _openG04,
+-            ),
+-            const SizedBox(height: 16),
+-            _GameCard(
+-              background: const Color(0xFFE8F7F2),
+-              iconBackground: const Color(0xFF27856E),
+-              icon: Icons.landscape_rounded,
+-              title: 'G05 • Montanha da Calma',
+-              description:
+-                  'Pratique pausas e estratégias de autorregulação em uma subida guiada, sem interpretar emoções ou diagnósticos.',
+-              buttonLabel: 'Iniciar Montanha da Calma',
+-              onTap: _openG05,
+-            ),
+-            const SizedBox(height: 16),
+-            _GameCard(
+-              background: const Color(0xFFFFF0E6),
+-              iconBackground: const Color(0xFFD46F35),
+-              icon: Icons.diversity_1_rounded,
+-              title: 'G06 • Mundo dos Amigos',
+-              description:
+-                  'Explore histórias sociais, respeito, turnos e alternativas de resposta sem exigir mascaramento comportamental.',
+-              buttonLabel: 'Iniciar Mundo dos Amigos',
+-              onTap: _openG06,
+-            ),
+-            const SizedBox(height: 18),
++            for (final mission in missions) ...[
++              _MissionCard(data: mission),
++              const SizedBox(height: 12),
++            ],
++            const SizedBox(height: 6),
+             Container(
+-              padding: const EdgeInsets.all(18),
++              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+               decoration: BoxDecoration(
+-                color: Theme.of(context).colorScheme.surfaceContainerHighest,
++                color: Theme.of(context).colorScheme.surfaceContainerLow,
+                 borderRadius: BorderRadius.circular(20),
+               ),
+-              child: Row(
++              child: const Row(
+                 children: [
+-                  const Icon(Icons.lock_outline_rounded),
+-                  const SizedBox(width: 12),
++                  Icon(Icons.shield_outlined, size: 22),
++                  SizedBox(width: 10),
+                   Expanded(
+                     child: Text(
+-                      'Sessões concluídas por ${_activeProfile?.displayLabel ?? 'este perfil'}: ${_completedSessions ?? 0}',
++                      'Sem anúncios • funciona offline • dados protegidos no aparelho',
++                      style: TextStyle(fontSize: 13, height: 1.35),
+                     ),
+                   ),
+                 ],
+               ),
+             ),
+-            const SizedBox(height: 18),
+-            const Text(
+-              'NeuroCore V0.6 é um protótipo neuroeducacional. As métricas não constituem diagnóstico médico, psicológico ou neuropsicológico.',
+-              style: TextStyle(fontSize: 12, height: 1.4),
+-            ),
+           ],
+         ),
+       ),
+@@ -316,71 +237,63 @@
+   }
+ }
+ 
+-class _GameCard extends StatelessWidget {
+-  const _GameCard({
+-    required this.background,
+-    required this.iconBackground,
+-    required this.icon,
++class _MissionCardData {
++  const _MissionCardData({
+     required this.title,
+-    required this.description,
+-    required this.buttonLabel,
++    required this.subtitle,
++    required this.icon,
++    required this.background,
++    required this.foreground,
+     required this.onTap,
+   });
+ 
+-  final Color background;
+-  final Color iconBackground;
+-  final IconData icon;
+   final String title;
+-  final String description;
+-  final String buttonLabel;
++  final String subtitle;
++  final IconData icon;
++  final Color background;
++  final Color foreground;
+   final VoidCallback onTap;
++}
++
++class _MissionCard extends StatelessWidget {
++  const _MissionCard({required this.data});
++  final _MissionCardData data;
+ 
+   @override
+   Widget build(BuildContext context) {
+     return Material(
+-      color: background,
