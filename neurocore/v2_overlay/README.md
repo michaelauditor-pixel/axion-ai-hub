@@ -1,0 +1,1 @@
+NeuroCore V2.0 audited UX/content overlay. Child-facing home redesigned; parent guide added; G05 upgraded to guided regulation practice; G06 supports multiple respectful responses; parent indicators are domain-specific after three same-game sessions.
