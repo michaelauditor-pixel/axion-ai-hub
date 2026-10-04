@@ -1,0 +1,313 @@
+diff -ruN '--exclude=*.orig' '--exclude=assets' nc_v19_base/lib/app.dart nc_v21_work/src/lib/app.dart
+--- nc_v19_base/lib/app.dart	2026-08-21 16:51:40.000000000 +0000
++++ nc_v21_work/src/lib/app.dart	2026-10-04 00:57:46.437304988 +0000
+@@ -49,10 +49,20 @@
+             headlineMedium: TextStyle(fontWeight: FontWeight.w800),
+             titleLarge: TextStyle(fontWeight: FontWeight.w700),
+           ),
++          cardTheme: CardThemeData(
++            elevation: 0,
++            margin: EdgeInsets.zero,
++            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
++          ),
++          appBarTheme: const AppBarTheme(
++            centerTitle: false,
++            scrolledUnderElevation: 0,
++          ),
+           filledButtonTheme: FilledButtonThemeData(
+             style: FilledButton.styleFrom(
+-              minimumSize: const Size(48, 52),
++              minimumSize: const Size(48, 54),
+               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
++              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+             ),
+           ),
+           outlinedButtonTheme: OutlinedButtonThemeData(
+diff -ruN '--exclude=*.orig' '--exclude=assets' nc_v19_base/lib/core/adaptive/social_adaptive_engine.dart nc_v21_work/src/lib/core/adaptive/social_adaptive_engine.dart
+--- nc_v19_base/lib/core/adaptive/social_adaptive_engine.dart	2026-08-21 16:51:40.000000000 +0000
++++ nc_v21_work/src/lib/core/adaptive/social_adaptive_engine.dart	2026-10-04 00:56:16.369989393 +0000
+@@ -9,7 +9,7 @@
+     required SocialPerformanceSnapshot performance,
+   }) {
+     final strain =
+-        performance.contextMatchRate < 0.60 || performance.omissionRate > 0.25;
++        performance.supportiveChoiceRate < 0.60 || performance.omissionRate > 0.25;
+     if (strain) {
+       final streak = state.strainStreak + 1;
+       return AdaptiveDecision(
+@@ -23,8 +23,7 @@
+       );
+     }
+     final mastery =
+-        performance.contextMatchRate >= 0.85 &&
+-        performance.supportiveChoiceRate >= 0.80;
++        performance.supportiveChoiceRate >= 0.85;
+     if (mastery) {
+       final streak = state.highPerformanceStreak + 1;
+       final increase = streak >= 2 && state.level < 5;
+diff -ruN '--exclude=*.orig' '--exclude=assets' nc_v19_base/lib/core/adaptive/social_performance_snapshot.dart nc_v21_work/src/lib/core/adaptive/social_performance_snapshot.dart
+--- nc_v19_base/lib/core/adaptive/social_performance_snapshot.dart	2026-08-21 16:51:40.000000000 +0000
++++ nc_v21_work/src/lib/core/adaptive/social_performance_snapshot.dart	2026-10-04 00:58:39.700550911 +0000
+@@ -50,6 +50,7 @@
+     'trials': trials,
+     'context_match_rate': contextMatchRate,
+     'supportive_choice_rate': supportiveChoiceRate,
++    'non_supportive_choice_rate': mismatchRate,
+     'mismatch_rate': mismatchRate,
+     'omission_rate': omissionRate,
+     'reaction_time_cv': reactionTimeCv,
+diff -ruN '--exclude=*.orig' '--exclude=assets' nc_v19_base/lib/core/feedback/game_feedback_service.dart nc_v21_work/src/lib/core/feedback/game_feedback_service.dart
+--- nc_v19_base/lib/core/feedback/game_feedback_service.dart	2026-08-21 16:51:41.000000000 +0000
++++ nc_v21_work/src/lib/core/feedback/game_feedback_service.dart	2026-10-04 00:56:40.337593749 +0000
+@@ -1,52 +1,52 @@
+-import 'dart:async';
+-
++import 'package:audioplayers/audioplayers.dart';
+ import 'package:flutter/services.dart';
+ 
+ import '../accessibility/accessibility_service.dart';
+ 
+-/// Feedback audiovisual leve e não punitivo para a área infantil.
+-/// Usa apenas recursos do sistema, sem SDKs externos ou rastreamento.
++/// Feedback sonoro/háptico leve, local e não punitivo.
++/// Nenhum áudio é transmitido ou baixado durante o uso.
+ class GameFeedbackService {
+-  const GameFeedbackService({required AccessibilityService accessibility})
++  GameFeedbackService({required AccessibilityService accessibility})
+     : _accessibility = accessibility;
+ 
+   final AccessibilityService _accessibility;
++  final AudioPlayer _player = AudioPlayer();
+ 
+   Future<void> start() async {
+-    await _soundPulse(count: 1);
++    await _play('audio/start.wav', volume: .28);
+     if (_accessibility.preferences.hapticsEnabled) {
+       await HapticFeedback.selectionClick();
+     }
+   }
+ 
+   Future<void> correct() async {
+-    await _soundPulse(count: 2, spacingMs: 70);
++    await _play('audio/correct.wav', volume: .30);
+     if (_accessibility.preferences.hapticsEnabled) {
+       await HapticFeedback.lightImpact();
+     }
+   }
+ 
+   Future<void> gentleMiss() async {
+-    await _soundPulse(count: 1);
++    await _play('audio/gentle_miss.wav', volume: .22);
+     if (_accessibility.preferences.hapticsEnabled) {
+       await HapticFeedback.selectionClick();
+     }
+   }
+ 
+   Future<void> complete() async {
+-    await _soundPulse(count: 3, spacingMs: 85);
++    await _play('audio/complete.wav', volume: .32);
+     if (_accessibility.preferences.hapticsEnabled) {
+       await HapticFeedback.mediumImpact();
+     }
+   }
+ 
+-  Future<void> _soundPulse({required int count, int spacingMs = 60}) async {
++  Future<void> _play(String asset, {required double volume}) async {
+     if (!_accessibility.preferences.soundEnabled) return;
+-    for (var i = 0; i < count; i += 1) {
+-      await SystemSound.play(SystemSoundType.click);
+-      if (i + 1 < count) {
+-        await Future<void>.delayed(Duration(milliseconds: spacingMs));
+-      }
++    try {
++      await _player.stop();
++      await _player.play(AssetSource(asset), volume: volume);
++    } catch (_) {
++      // Som é acessório: falha de áudio nunca bloqueia a missão.
+     }
+   }
+ }
+diff -ruN '--exclude=*.orig' '--exclude=assets' nc_v19_base/lib/core/product_info.dart nc_v21_work/src/lib/core/product_info.dart
+--- nc_v19_base/lib/core/product_info.dart	1970-01-01 00:00:00.000000000 +0000
++++ nc_v21_work/src/lib/core/product_info.dart	2026-10-04 00:52:35.878835515 +0000
+@@ -0,0 +1,17 @@
++class ProductInfo {
++  const ProductInfo._();
++
++  static const String name = 'NeuroCore';
++  static const String versionLabel = '2.1';
++  static const String recommendedAge = '6 a 11 anos';
++  static const String developer = 'Equipe NeuroCore';
++  static const String country = 'Brasil';
++  static const String positioning =
++      'Plataforma neuroeducacional para prática de funções executivas, autorregulação e aprendizagem socioemocional.';
++  static const String clinicalBoundary =
++      'Não realiza diagnóstico, não trata TDAH, TEA ou outros transtornos e não substitui avaliação, terapia ou tratamento profissional.';
++  static const String audienceNote =
++      'Pode ser usada como prática complementar por crianças que apresentem dificuldades de atenção, controle de impulsos, memória de trabalho, flexibilidade, autorregulação ou habilidades sociais.';
++  static const String marketNote =
++      'Produto desenvolvido no Brasil. A arquitetura permite localização para outros idiomas e mercados; cada tradução deve passar por revisão linguística e cultural antes da publicação.';
++}
+diff -ruN '--exclude=*.orig' '--exclude=assets' nc_v19_base/lib/core/profile/neuro_profile_aggregator.dart nc_v21_work/src/lib/core/profile/neuro_profile_aggregator.dart
+--- nc_v19_base/lib/core/profile/neuro_profile_aggregator.dart	2026-08-21 16:51:40.000000000 +0000
++++ nc_v21_work/src/lib/core/profile/neuro_profile_aggregator.dart	2026-10-04 00:56:59.530279302 +0000
+@@ -1,9 +1,13 @@
+ import '../../ml/feature_contract.dart';
+ import 'profile_models.dart';
+ 
++/// Agrega somente tendências comparáveis dentro do mesmo jogo.
++/// Um domínio só é exibido após >= 3 sessões concluídas daquele jogo.
+ class NeuroProfileAggregator {
+   const NeuroProfileAggregator();
+ 
++  static const int minimumSameGameSessions = 3;
++
+   NeuroProfileView aggregate({
+     required String profileId,
+     required List<SessionFeatureVectorV1> features,
+@@ -25,118 +29,56 @@
+         updatedAt: null,
+       );
+     }
++
+     final ordered = [...features]
+       ..sort((a, b) => a.completedAt.compareTo(b.completedAt));
+-    double? attention,
+-        inhibition,
+-        memory,
+-        flexibility,
+-        regulation,
+-        social,
+-        consistency;
+-    var difficultySum = 0.0;
++    final byGame = <String, List<SessionFeatureVectorV1>>{};
+     for (final feature in ordered) {
+-      switch (feature.gameId) {
+-        case 'G01_missao_foco':
+-          attention = _ewma(attention, _accuracyScore(feature));
+-          break;
+-        case 'G02_pare_pense_va':
+-          inhibition = _ewma(inhibition, _accuracyScore(feature));
+-          break;
+-        case 'G03_memoria_magica':
+-          memory = _ewma(memory, _accuracyScore(feature));
+-          break;
+-        case 'G04_troca_troca':
+-          flexibility = _ewma(flexibility, _accuracyScore(feature));
+-          break;
+-        case 'G05_montanha_calma':
+-          regulation = _ewma(regulation, _accuracyScore(feature));
+-          break;
+-        case 'G06_mundo_amigos':
+-          social = _ewma(social, _accuracyScore(feature));
+-          break;
++      byGame.putIfAbsent(feature.gameId, () => []).add(feature);
++    }
++
++    double? domain(String gameId) {
++      final values = byGame[gameId] ?? const <SessionFeatureVectorV1>[];
++      if (values.length < minimumSameGameSessions) return null;
++      double? score;
++      for (final value in values) {
++        score = _ewma(score, _accuracyScore(value));
+       }
+-      consistency = _ewma(
+-        consistency,
+-        (1 - feature.reactionTimeCv.clamp(0.0, 1.0)) * 100,
+-      );
+-      difficultySum += feature.finalDifficulty;
++      return score == null ? null : _clamp100(score);
+     }
+-    final values = <double>[
+-      if (attention != null) attention,
+-      if (inhibition != null) inhibition,
+-      if (memory != null) memory,
+-      if (flexibility != null) flexibility,
+-      if (regulation != null) regulation,
+-      if (social != null) social,
+-      if (consistency != null) consistency,
+-    ];
+-    final overall = values.reduce((a, b) => a + b) / values.length;
++
++    final difficultySum = ordered.fold<double>(
++      0,
++      (sum, feature) => sum + feature.finalDifficulty,
++    );
++
+     return NeuroProfileView(
+       profileId: profileId,
+       sessionCount: ordered.length,
+-      sustainedAttentionIndicator: attention == null
+-          ? null
+-          : _clamp100(attention),
+-      inhibitoryControlIndicator: inhibition == null
+-          ? null
+-          : _clamp100(inhibition),
+-      workingMemoryIndicator: memory == null ? null : _clamp100(memory),
+-      cognitiveFlexibilityIndicator: flexibility == null
+-          ? null
+-          : _clamp100(flexibility),
+-      selfRegulationPracticeIndicator: regulation == null
+-          ? null
+-          : _clamp100(regulation),
+-      socialEmotionalLearningIndicator: social == null
+-          ? null
+-          : _clamp100(social),
+-      responseConsistencyIndicator: consistency == null
+-          ? null
+-          : _clamp100(consistency),
+-      overallGameplayIndicator: _clamp100(overall),
++      sustainedAttentionIndicator: domain('G01_missao_foco'),
++      inhibitoryControlIndicator: domain('G02_pare_pense_va'),
++      workingMemoryIndicator: domain('G03_memoria_magica'),
++      cognitiveFlexibilityIndicator: domain('G04_troca_troca'),
++      selfRegulationPracticeIndicator: domain('G05_montanha_calma'),
++      socialEmotionalLearningIndicator: domain('G06_mundo_amigos'),
++      responseConsistencyIndicator: null,
++      overallGameplayIndicator: null,
+       averageDifficulty: difficultySum / ordered.length,
+-      trend: _trend(ordered),
++      trend: 'domain_specific',
+       updatedAt: ordered.last.completedAt,
+     );
+   }
+ 
+   double _accuracyScore(SessionFeatureVectorV1 f) {
+-    final hit = f.hitRate.clamp(0.0, 1.0),
+-        errors = f.commissionRate.clamp(0.0, 1.0),
+-        omissions = f.omissionRate.clamp(0.0, 1.0);
++    final hit = f.hitRate.clamp(0.0, 1.0);
++    final errors = f.commissionRate.clamp(0.0, 1.0);
++    final omissions = f.omissionRate.clamp(0.0, 1.0);
+     return ((hit * 0.70) + ((1 - errors) * 0.20) + ((1 - omissions) * 0.10)) *
+         100;
+   }
+@@ -146,38 +88,6 @@
+         : (alpha * current) + ((1 - alpha) * previous);
+   }
+ 
+-  String _trend(List<SessionFeatureVectorV1> ordered) {
+-    if (ordered.length < 4) return 'insufficient_data';
+-    final n = ordered.length >= 6 ? 3 : 2;
+-    final recent = ordered.sublist(ordered.length - n);
+-    final start = (ordered.length - (n * 2)).clamp(0, ordered.length).toInt();
+-    final prior = ordered.sublist(start, ordered.length - n);
+-    if (prior.isEmpty) return 'insufficient_data';
+-    final delta = _meanOverall(recent) - _meanOverall(prior);
+-    if (delta >= 5) return 'improving';
+-    if (delta <= -5) return 'declining';
+-    return 'stable';
+-  }
+-
+-  double _meanOverall(List<SessionFeatureVectorV1> v) {
+-    var sum = 0.0;
+-    for (final f in v) {
+-      sum +=
+-          (_accuracyScore(f) + (1 - f.reactionTimeCv.clamp(0.0, 1.0)) * 100) /
+-          2;
+-    }
+-    return sum / v.length;
+-  }
+-
+   double _clamp100(double value) => value.clamp(0.0, 100.0).toDouble();
+ }
