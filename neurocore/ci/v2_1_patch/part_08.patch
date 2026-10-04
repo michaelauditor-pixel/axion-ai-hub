@@ -1,0 +1,307 @@
+-          Text('Tendência recente: ${_trendLabel(profile.trend)}'),
+         ],
+       ),
+     );
+   }
++}
+ 
+-  String _trendLabel(String value) {
+-    switch (value) {
+-      case 'improving':
+-        return 'melhora no desempenho do jogo';
+-      case 'declining':
+-        return 'queda recente — revisar carga e contexto';
+-      case 'stable':
+-        return 'estável';
+-      default:
+-        return 'dados ainda insuficientes';
++class _DomainRow extends StatelessWidget {
++  const _DomainRow({required this.label, required this.count, required this.value});
++  final String label;
++  final int count;
++  final double? value;
++
++  @override
++  Widget build(BuildContext context) {
++    if (value == null) {
++      return Padding(
++        padding: const EdgeInsets.only(bottom: 12),
++        child: Row(
++          children: [
++            Expanded(child: Text(label)),
++            Text('${count.clamp(0, 3)}/3', style: const TextStyle(fontWeight: FontWeight.w800)),
++          ],
++        ),
++      );
+     }
++    return _Indicator(label: label, value: value!);
+   }
+ }
+ 
+@@ -468,25 +486,25 @@
+         crossAxisAlignment: CrossAxisAlignment.start,
+         children: [
+           const Text(
+-            'Qualidade dos dados',
++            'Qualidade do histórico',
+             style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+           ),
+           const SizedBox(height: 10),
+           Text(
+-            '${snapshot.totalFeatureSessions} sessões com vetor de features',
++            '${snapshot.totalFeatureSessions} sessões concluídas com dados válidos',
+           ),
+           Text(
+-            'Longitudinal: ${snapshot.longitudinalEligible} (${pct(snapshot.longitudinalEligibilityRate)})',
++            'Úteis para acompanhar repetição no tempo: ${snapshot.longitudinalEligible} (${pct(snapshot.longitudinalEligibilityRate)})',
+           ),
+           Text(
+-            'ML shadow: ${snapshot.mlShadowEligible} (${pct(snapshot.mlShadowEligibilityRate)})',
++            'Sessões tecnicamente completas: ${snapshot.mlShadowEligible} (${pct(snapshot.mlShadowEligibilityRate)})',
+           ),
+           Text(
+-            'Cobertura dos 6 jogos: ${snapshot.hasAllSixGames ? 'completa' : 'ainda incompleta'}',
++            'Missões diferentes já utilizadas: ${snapshot.hasAllSixGames ? 'todas as 6' : 'cobertura ainda parcial'}',
+           ),
+           const SizedBox(height: 8),
+           const Text(
+-            'Gate técnico de qualidade de dados; não classifica a criança.',
++            'Este quadro avalia a qualidade do registro, não a criança.',
+             style: TextStyle(fontSize: 12),
+           ),
+         ],
+diff -ruN '--exclude=*.orig' '--exclude=assets' nc_v19_base/lib/features/parent/parent_guide_screen.dart nc_v21_work/src/lib/features/parent/parent_guide_screen.dart
+--- nc_v19_base/lib/features/parent/parent_guide_screen.dart	1970-01-01 00:00:00.000000000 +0000
++++ nc_v21_work/src/lib/features/parent/parent_guide_screen.dart	2026-10-04 00:52:35.882099633 +0000
+@@ -0,0 +1,252 @@
++import 'package:flutter/material.dart';
++
++import '../../core/product_info.dart';
++
++class ParentGuideScreen extends StatelessWidget {
++  const ParentGuideScreen({super.key});
++
++  @override
++  Widget build(BuildContext context) {
++    return Scaffold(
++      appBar: AppBar(title: const Text('Guia para responsáveis')),
++      body: ListView(
++        padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
++        children: const [
++          _IntroCard(),
++          SizedBox(height: 14),
++          _MissionGuide(
++            code: 'G01',
++            title: 'Missão Foco',
++            skill: 'Atenção seletiva e consistência de resposta',
++            how:
++                'A criança procura um alvo específico entre distratores. Em algumas tentativas o alvo não aparece, e a resposta correta é esperar sem tocar.',
++            observe:
++                'Precisão para localizar o alvo, toques em distratores, omissões e estabilidade do tempo de resposta.',
++            limit:
++                'Melhor desempenho no jogo não prova melhora da atenção na escola ou em outras atividades.',
++          ),
++          _MissionGuide(
++            code: 'G02',
++            title: 'Pare, Pense, Vá!',
++            skill: 'Controle inibitório',
++            how:
++                'A criança toca quando vê VÁ e inibe a resposta quando vê PARE. Os blocos são balanceados para sempre conter estímulos PARE.',
++            observe:
++                'Acertos em VÁ, capacidade de não tocar em PARE, omissões e regularidade da resposta.',
++            limit:
++                'É treino de inibição no jogo; não permite concluir que impulsividade clínica foi reduzida.',
++          ),
++          _MissionGuide(
++            code: 'G03',
++            title: 'Memória Mágica',
++            skill: 'Memória de trabalho',
++            how:
++                'Símbolos aparecem em sequência e a criança precisa reproduzir a mesma ordem depois que eles somem.',
++            observe:
++                'Comprimento das sequências, itens lembrados, erros de ordem e adaptação ao aumento de dificuldade.',
++            limit:
++                'O resultado descreve memória de trabalho dentro da tarefa e não equivale a teste neuropsicológico.',
++          ),
++          _MissionGuide(
++            code: 'G04',
++            title: 'Troca-Troca',
++            skill: 'Flexibilidade cognitiva',
++            how:
++                'A criança classifica o mesmo estímulo por COR ou FORMA e precisa mudar de critério quando a regra troca.',
++            observe:
++                'Acertos após troca de regra, erros perseverativos e adaptação ao novo critério.',
++            limit:
++                'O jogo pratica mudança de regra; não mede sozinho flexibilidade no cotidiano.',
++          ),
++          _MissionGuide(
++            code: 'G05',
++            title: 'Montanha da Calma',
++            skill: 'Prática de ferramentas de autorregulação',
++            how:
++                'A criança escolhe uma ferramenta e executa uma prática guiada: respiração lenta, tensão/relaxamento das mãos, atenção aos sentidos ou pausa e escolha.',
++            observe:
++                'Engajamento com a prática, conclusão das etapas e tolerância ao ritmo guiado.',
++            limit:
++                'Não mede emoções, crises, agressividade ou risco; não é intervenção de emergência.',
++          ),
++          _MissionGuide(
++            code: 'G06',
++            title: 'Mundo dos Amigos',
++            skill: 'Aprendizagem socioemocional e resolução de situações sociais',
++            how:
++                'Histórias apresentam limites, turnos, ajuda, desacordo e reparação. Mais de uma resposta respeitosa pode ser aceita.',
++            observe:
++                'Escolhas respeitosas, consideração de alternativas e compreensão do contexto apresentado.',
++            limit:
++                'Não avalia autismo, empatia ou personalidade e não exige mascaramento comportamental.',
++          ),
++          SizedBox(height: 14),
++          _EvidenceCard(),
++          SizedBox(height: 14),
++          _ProductCard(),
++        ],
++      ),
++    );
++  }
++}
++
++class _IntroCard extends StatelessWidget {
++  const _IntroCard();
++
++  @override
++  Widget build(BuildContext context) {
++    return _Panel(
++      color: const Color(0xFFEAF0FF),
++      child: Column(
++        crossAxisAlignment: CrossAxisAlignment.start,
++        children: [
++          const Text(
++            'Para que serve o NeuroCore?',
++            style: TextStyle(fontSize: 23, fontWeight: FontWeight.w900),
++          ),
++          const SizedBox(height: 10),
++          Text(ProductInfo.positioning, style: const TextStyle(height: 1.45)),
++          const SizedBox(height: 10),
++          const _InfoRow(
++            icon: Icons.child_care_rounded,
++            text: 'Faixa principal: ${ProductInfo.recommendedAge}',
++          ),
++          const _InfoRow(
++            icon: Icons.timer_outlined,
++            text: 'Sessões curtas; interrompa se houver cansaço ou desconforto.',
++          ),
++          const _InfoRow(
++            icon: Icons.health_and_safety_outlined,
++            text: ProductInfo.clinicalBoundary,
++          ),
++        ],
++      ),
++    );
++  }
++}
++
++class _MissionGuide extends StatelessWidget {
++  const _MissionGuide({
++    required this.code,
++    required this.title,
++    required this.skill,
++    required this.how,
++    required this.observe,
++    required this.limit,
++  });
++
++  final String code;
++  final String title;
++  final String skill;
++  final String how;
++  final String observe;
++  final String limit;
++
++  @override
++  Widget build(BuildContext context) {
++    return Padding(
++      padding: const EdgeInsets.only(bottom: 12),
++      child: _Panel(
++        child: Column(
++          crossAxisAlignment: CrossAxisAlignment.start,
++          children: [
++            Text(
++              '$code • $title',
++              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
++            ),
++            const SizedBox(height: 4),
++            Text(skill, style: const TextStyle(fontWeight: FontWeight.w700)),
++            const SizedBox(height: 14),
++            const Text('Como funciona', style: TextStyle(fontWeight: FontWeight.w800)),
++            Text(how, style: const TextStyle(height: 1.4)),
++            const SizedBox(height: 10),
++            const Text('O que observar', style: TextStyle(fontWeight: FontWeight.w800)),
++            Text(observe, style: const TextStyle(height: 1.4)),
++            const SizedBox(height: 10),
++            const Text('Limite da interpretação', style: TextStyle(fontWeight: FontWeight.w800)),
++            Text(limit, style: const TextStyle(height: 1.4)),
++          ],
++        ),
++      ),
++    );
++  }
++}
++
++class _EvidenceCard extends StatelessWidget {
++  const _EvidenceCard();
++
++  @override
++  Widget build(BuildContext context) {
++    return const _Panel(
++      color: Color(0xFFEAF8F2),
++      child: Column(
++        crossAxisAlignment: CrossAxisAlignment.start,
++        children: [
++          Text('Como interpretar resultados', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
++          SizedBox(height: 10),
++          Text(
++            'O painel só deve formar um indicador após pelo menos 3 sessões concluídas do mesmo jogo. Jogos diferentes não são somados em uma nota global. Uma tendência dentro do jogo indica mudança de desempenho naquela tarefa, não eficácia clínica fora dela.',
++            style: TextStyle(height: 1.45),
++          ),
++        ],
++      ),
++    );
++  }
++}
++
++class _ProductCard extends StatelessWidget {
++  const _ProductCard();
++
++  @override
++  Widget build(BuildContext context) {
++    return const _Panel(
++      color: Color(0xFFFFF4DD),
++      child: Column(
++        crossAxisAlignment: CrossAxisAlignment.start,
++        children: [
++          Text('Sobre o produto', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
++          SizedBox(height: 10),
++          Text('${ProductInfo.name} ${ProductInfo.versionLabel} • ${ProductInfo.developer} • ${ProductInfo.country}'),
++          SizedBox(height: 8),
++          Text(ProductInfo.audienceNote, style: TextStyle(height: 1.45)),
++          SizedBox(height: 8),
++          Text(ProductInfo.marketNote, style: TextStyle(height: 1.45)),
++        ],
++      ),
++    );
++  }
++}
++
++class _InfoRow extends StatelessWidget {
++  const _InfoRow({required this.icon, required this.text});
++  final IconData icon;
++  final String text;
++  @override
++  Widget build(BuildContext context) => Padding(
++    padding: const EdgeInsets.only(top: 8),
++    child: Row(
++      crossAxisAlignment: CrossAxisAlignment.start,
++      children: [
++        Icon(icon, size: 20),
++        const SizedBox(width: 10),
