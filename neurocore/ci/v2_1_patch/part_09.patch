@@ -1,0 +1,227 @@
++        Expanded(child: Text(text, style: const TextStyle(height: 1.4))),
++      ],
++    ),
++  );
++}
++
++class _Panel extends StatelessWidget {
++  const _Panel({required this.child, this.color});
++  final Widget child;
++  final Color? color;
++  @override
++  Widget build(BuildContext context) => Container(
++    padding: const EdgeInsets.all(20),
++    decoration: BoxDecoration(
++      color: color ?? Theme.of(context).colorScheme.surfaceContainerLow,
++      borderRadius: BorderRadius.circular(24),
++      border: Border.all(color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: .45)),
++    ),
++    child: child,
++  );
++}
+diff -ruN '--exclude=*.orig' '--exclude=assets' nc_v19_base/pubspec.yaml nc_v21_work/src/pubspec.yaml
+--- nc_v19_base/pubspec.yaml	2026-08-21 16:51:41.000000000 +0000
++++ nc_v21_work/src/pubspec.yaml	2026-10-04 00:56:40.920540485 +0000
+@@ -1,7 +1,7 @@
+ name: neurocore_app
+-description: NeuroCore V1.9 AUDITED - plataforma neuroeducacional infantil offline-first com acessibilidade, privacidade, QA e release hardening.
++description: NeuroCore V2.1 - plataforma neuroeducacional infantil offline-first com missões alinhadas às habilidades treinadas, guia parental e privacidade.
+ publish_to: "none"
+-version: 1.9.0+19
++version: 2.1.0+21
+ 
+ environment:
+   sdk: ">=3.10.0 <4.0.0"
+@@ -11,6 +11,7 @@
+     sdk: flutter
+   cryptography: ^2.9.0
+   flutter_secure_storage: 10.3.1
++  audioplayers: 6.8.1
+   path: ^1.9.1
+   path_provider: ^2.1.6
+   sqflite: ^2.4.3
+@@ -21,3 +22,5 @@
+ 
+ flutter:
+   uses-material-design: true
++  assets:
++    - assets/audio/
+diff -ruN '--exclude=*.orig' '--exclude=assets' nc_v19_base/test/neuro_profile_aggregator_test.dart nc_v21_work/src/test/neuro_profile_aggregator_test.dart
+--- nc_v19_base/test/neuro_profile_aggregator_test.dart	2026-08-16 09:06:15.000000000 +0000
++++ nc_v21_work/src/test/neuro_profile_aggregator_test.dart	2026-10-04 00:58:31.497555783 +0000
+@@ -3,31 +3,38 @@
+ import 'package:neurocore_app/ml/feature_contract.dart';
+ 
+ void main() {
+-  test('aggregator forms non-diagnostic longitudinal indicators', () {
+-    final features = List<SessionFeatureVectorV1>.generate(6, (index) {
+-      return SessionFeatureVectorV1(
+-        profileId: 'p1',
+-        sessionId: 's$index',
+-        gameId: 'G01_missao_foco',
+-        completedAt: DateTime.utc(2026, 8, 1 + index),
+-        hitRate: 0.70 + (index * 0.04),
+-        commissionRate: 0.20 - (index * 0.02),
+-        omissionRate: 0.20 - (index * 0.02),
+-        reactionTimeCv: 0.35 - (index * 0.03),
+-        medianReactionTimeMs: 900 - (index * 20),
+-        finalDifficulty: 2 + (index ~/ 3),
+-        blocksCompleted: 5,
+-      );
+-    });
++  SessionFeatureVectorV1 feature(int index) => SessionFeatureVectorV1(
++    profileId: 'p1',
++    sessionId: 's$index',
++    gameId: 'G01_missao_foco',
++    completedAt: DateTime.utc(2026, 8, 1 + index),
++    hitRate: 0.72 + (index * 0.04),
++    commissionRate: 0.18 - (index * 0.02),
++    omissionRate: 0.18 - (index * 0.02),
++    reactionTimeCv: 0.30,
++    medianReactionTimeMs: 850,
++    finalDifficulty: 2,
++    blocksCompleted: 5,
++  );
+ 
++  test('domain remains hidden before three same-game sessions', () {
+     final view = const NeuroProfileAggregator().aggregate(
+       profileId: 'p1',
+-      features: features,
++      features: [feature(0), feature(1)],
+     );
++    expect(view.sustainedAttentionIndicator, isNull);
++    expect(view.overallGameplayIndicator, isNull);
++  });
+ 
+-    expect(view.sessionCount, 6);
+-    expect(view.overallGameplayIndicator, isNotNull);
+-    expect(view.overallGameplayIndicator!, inInclusiveRange(0, 100));
+-    expect(view.trend, anyOf('improving', 'stable'));
++  test('domain appears after three comparable sessions without global score', () {
++    final view = const NeuroProfileAggregator().aggregate(
++      profileId: 'p1',
++      features: [feature(0), feature(1), feature(2), feature(3)],
++    );
++    expect(view.sustainedAttentionIndicator, isNotNull);
++    expect(view.sustainedAttentionIndicator!, inInclusiveRange(0, 100));
++    expect(view.overallGameplayIndicator, isNull);
++    expect(view.responseConsistencyIndicator, isNull);
++    expect(view.trend, 'domain_specific');
+   });
+ }
+diff -ruN '--exclude=*.orig' '--exclude=assets' nc_v19_base/test/neuro_profile_multidomain_test.dart nc_v21_work/src/test/neuro_profile_multidomain_test.dart
+--- nc_v19_base/test/neuro_profile_multidomain_test.dart	2026-08-21 16:51:41.000000000 +0000
++++ nc_v21_work/src/test/neuro_profile_multidomain_test.dart	2026-10-04 00:58:31.498029145 +0000
+@@ -3,12 +3,7 @@
+ import 'package:neurocore_app/ml/feature_contract.dart';
+ 
+ void main() {
+-  SessionFeatureVectorV1 feature(
+-    String game,
+-    int day,
+-    double hit,
+-    double error,
+-  ) {
++  SessionFeatureVectorV1 feature(String game, int day, double hit, double error) {
+     return SessionFeatureVectorV1(
+       profileId: 'p1',
+       sessionId: '$game-$day',
+@@ -24,17 +19,26 @@
+     );
+   }
+ 
+-  test('each game feeds its own NeuroProfile domain', () {
++  test('each game needs three sessions and never produces a global score', () {
++    final games = <String>[
++      'G01_missao_foco',
++      'G02_pare_pense_va',
++      'G03_memoria_magica',
++      'G04_troca_troca',
++      'G05_montanha_calma',
++      'G06_mundo_amigos',
++    ];
++    var day = 1;
++    final features = <SessionFeatureVectorV1>[];
++    for (final game in games) {
++      for (var i = 0; i < 3; i++) {
++        features.add(feature(game, day++, .84 + i * .02, .10 - i * .01));
++      }
++    }
++
+     final view = const NeuroProfileAggregator().aggregate(
+       profileId: 'p1',
+-      features: [
+-        feature('G01_missao_foco', 1, 0.85, 0.10),
+-        feature('G02_pare_pense_va', 2, 0.90, 0.08),
+-        feature('G03_memoria_magica', 3, 0.82, 0.12),
+-        feature('G04_troca_troca', 4, 0.80, 0.10),
+-        feature('G05_montanha_calma', 5, 0.84, 0.08),
+-        feature('G06_mundo_amigos', 6, 0.86, 0.07),
+-      ],
++      features: features,
+     );
+ 
+     expect(view.sustainedAttentionIndicator, isNotNull);
+@@ -43,6 +47,6 @@
+     expect(view.cognitiveFlexibilityIndicator, isNotNull);
+     expect(view.selfRegulationPracticeIndicator, isNotNull);
+     expect(view.socialEmotionalLearningIndicator, isNotNull);
+-    expect(view.overallGameplayIndicator, isNotNull);
++    expect(view.overallGameplayIndicator, isNull);
+   });
+ }
+diff -ruN '--exclude=*.orig' '--exclude=assets' nc_v19_base/test/v21_product_audit_test.dart nc_v21_work/src/test/v21_product_audit_test.dart
+--- nc_v19_base/test/v21_product_audit_test.dart	1970-01-01 00:00:00.000000000 +0000
++++ nc_v21_work/src/test/v21_product_audit_test.dart	2026-10-04 00:58:31.503528738 +0000
+@@ -0,0 +1,51 @@
++import 'dart:io';
++import 'dart:math';
++
++import 'package:flutter_test/flutter_test.dart';
++import 'package:neurocore_app/core/product_info.dart';
++import 'package:neurocore_app/features/g06_social/social_scenario.dart';
++
++void main() {
++  test('product positioning has age and clinical boundary', () {
++    expect(ProductInfo.recommendedAge, '6 a 11 anos');
++    expect(ProductInfo.clinicalBoundary.toLowerCase(), contains('não realiza diagnóstico'));
++    expect(ProductInfo.clinicalBoundary.toLowerCase(), contains('não trata tdah'));
++  });
++
++  test('G06 accepts multiple supportive responses in every story', () {
++    expect(SocialScenario.examples.length, greaterThanOrEqualTo(10));
++    final random = Random(22);
++    for (final scenario in SocialScenario.examples) {
++      expect(scenario.supportiveIndices.length, greaterThanOrEqualTo(2));
++      final presented = scenario.present(
++        random: random,
++        choiceCount: 4,
++        preferredPosition: 1,
++      );
++      expect(presented.supportiveIndices.length, greaterThanOrEqualTo(2));
++      expect(presented.preferredIndex, 1);
++    }
++  });
++
++  test('G05 contains real guided practice rather than passive labels', () {
++    final source = File('lib/features/g05_regulation/g05_screen.dart').readAsStringSync();
++    expect(source, contains('_runGuidedPractice'));
++    expect(source, contains('Puxe o ar devagar'));
++    expect(source, contains('Mãos fortes, mãos soltas'));
++    expect(source, contains('3–2–1 dos sentidos'));
++  });
++
++  test('child home does not expose engineering jargon or stale versions', () {
++    final source = File('lib/features/home/home_screen.dart').readAsStringSync();
++    expect(source, isNot(contains('ML shadow')));
++    expect(source, isNot(contains('V0.6')));
++    expect(source, isNot(contains('V1.7')));
++    expect(source, isNot(contains('V1.9 AUDITED')));
++  });
++
++  test('G01 tutorial explains target-absent trials', () {
++    final source = File('lib/features/g01_focus/g01_screen.dart').readAsStringSync();
++    expect(source, contains('Se ela não aparecer'));
++    expect(source, contains('não toque em nada'));
++  });
++}
